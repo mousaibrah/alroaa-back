@@ -28,7 +28,9 @@ export class PlaybackService {
     private readonly urls: PlaybackUrlService,
   ) {}
 
-  async resolve(lessonId: number, user: JwtPayload) {
+  // `lang` picks the recording language; the other one is the fallback when a
+  // lesson exists in a single language.
+  async resolve(lessonId: number, user: JwtPayload, lang: 'en' | 'ar' = 'en') {
     const lesson = await this.prisma.lesson.findFirst({
       where: {
         id: lessonId,
@@ -38,7 +40,8 @@ export class PlaybackService {
       select: {
         id: true,
         lessonType: true,
-        contentUrl: true,
+        contentUrlEn: true,
+        contentUrlAr: true,
         isPreview: true,
         section: {
           select: {
@@ -55,13 +58,17 @@ export class PlaybackService {
     if (!manages && course.status !== 'published') {
       throw new NotFoundException('Lesson not found');
     }
-    if (lesson.lessonType !== 'video' || !lesson.contentUrl) {
+    const contentUrl =
+      lang === 'ar'
+        ? (lesson.contentUrlAr ?? lesson.contentUrlEn)
+        : (lesson.contentUrlEn ?? lesson.contentUrlAr);
+    if (lesson.lessonType !== 'video' || !contentUrl) {
       throw new NotFoundException('This lesson has no video');
     }
 
     if (!manages)
       await this.assertLearnerMayWatch(lesson, courseId, course, user);
-    return this.urls.sign(lesson.contentUrl);
+    return this.urls.sign(contentUrl);
   }
 
   private async assertLearnerMayWatch(

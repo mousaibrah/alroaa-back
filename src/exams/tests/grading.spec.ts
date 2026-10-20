@@ -10,12 +10,12 @@ const q = (
   optionIds: number[],
 ): GradableQuestion => ({
   id,
-  text: `Q${id}`,
+  textEn: `Q${id}`, textAr: `Q${id}`,
   questionType,
   points,
   options: optionIds.map((o) => ({
     id: o,
-    optionText: `O${o}`,
+    optionTextEn: `O${o}`, optionTextAr: `O${o}`,
     isCorrect: correct.includes(o),
   })),
 });
@@ -60,9 +60,9 @@ describe('gradeExam', () => {
   it('reports the correct options and the learner’s selection in the review', () => {
     const r = grade({ 1: [10] });
     expect(r.questions[0].options).toEqual([
-      { id: 10, text: 'O10', isCorrect: false, selected: true },
-      { id: 11, text: 'O11', isCorrect: true, selected: false },
-      { id: 12, text: 'O12', isCorrect: false, selected: false },
+      { id: 10, textEn: 'O10', textAr: 'O10', isCorrect: false, selected: true },
+      { id: 11, textEn: 'O11', textAr: 'O11', isCorrect: true, selected: false },
+      { id: 12, textEn: 'O12', textAr: 'O12', isCorrect: false, selected: false },
     ]);
   });
 });

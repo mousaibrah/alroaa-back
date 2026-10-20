@@ -6,12 +6,12 @@ const exam = (
   questions: SaveExamDto['questions'],
   passingScore = 0,
 ): SaveExamDto => ({
-  title: 'Exam',
+  titleEn: 'Exam', titleAr: 'Exam',
   passingScore,
   questions,
 });
 const opts = (...correct: boolean[]) =>
-  correct.map((isCorrect, i) => ({ optionText: `o${i}`, isCorrect }));
+  correct.map((isCorrect, i) => ({ optionTextEn: `o${i}`, optionTextAr: `o${i}`, isCorrect }));
 
 describe('validateExam', () => {
   it('accepts valid questions of every type', () => {
@@ -20,19 +20,19 @@ describe('validateExam', () => {
         exam(
           [
             {
-              text: 'a',
+              textEn: 'a', textAr: 'a',
               questionType: 'single_choice',
               points: 2,
               options: opts(true, false, false),
             },
             {
-              text: 'b',
+              textEn: 'b', textAr: 'b',
               questionType: 'multiple_choice',
               points: 2,
               options: opts(true, true, false),
             },
             {
-              text: 'c',
+              textEn: 'c', textAr: 'c',
               questionType: 'true_false',
               points: 1,
               options: opts(false, true),
@@ -63,7 +63,7 @@ describe('validateExam', () => {
     ['true/false with three options', 'true_false', opts(true, false, false)],
   ] as const)('rejects %s', (_name, questionType, options) => {
     expect(() =>
-      validateExam(exam([{ text: 'q', questionType, points: 1, options }])),
+      validateExam(exam([{ textEn: 'q', textAr: 'q', questionType, points: 1, options }])),
     ).toThrow(BadRequestException);
   });
 
@@ -73,7 +73,7 @@ describe('validateExam', () => {
         exam(
           [
             {
-              text: 'q',
+              textEn: 'q', textAr: 'q',
               questionType: 'single_choice',
               points: 1,
               options: opts(true, false),

@@ -17,21 +17,40 @@ export class CreateLessonDto {
   @IsString()
   @MinLength(1)
   @MaxLength(255)
-  title: string;
+  titleEn: string;
+
+  @ApiProperty({ example: 'تثبيت الأدوات', maxLength: 255 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  titleAr: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  description?: string;
+  descriptionEn?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
 
   @ApiProperty({ enum: LessonType })
   @IsEnum(LessonType)
   lessonType: LessonType;
 
-  @ApiPropertyOptional({ example: 'https://cdn.example.com/lesson1.mp4' })
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/lesson1-en.mp4',
+    description: 'English video/file. Fill only one if the lesson has a single language.',
+  })
   @IsOptional()
   @IsUrl()
-  contentUrl?: string;
+  contentUrlEn?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/lesson1-ar.mp4' })
+  @IsOptional()
+  @IsUrl()
+  contentUrlAr?: string;
 
   @ApiPropertyOptional({ example: 600, description: 'Duration in seconds' })
   @IsOptional()

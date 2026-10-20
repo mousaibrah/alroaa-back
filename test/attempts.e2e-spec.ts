@@ -19,7 +19,7 @@ describe.skipIf(!process.env.SCRATCH_URL)('exam attempts (scratch db)', () => {
 	let progress: ProgressService;
 	let teacher: JwtPayload, student: JwtPayload, stranger: JwtPayload;
 	let courseId: number, lessonId: number, examId: number;
-	let q1: { id: number; options: { id: number; text: string }[] };
+	let q1: { id: number; options: { id: number; textEn: string }[] };
 
 	const mk = async (email: string, roleId: number, role: string) => {
 		const u = await prisma.user.create({
@@ -45,42 +45,42 @@ describe.skipIf(!process.env.SCRATCH_URL)('exam attempts (scratch db)', () => {
 		student = await mk(`xs-${run}@x.com`, 2, 'student');
 		stranger = await mk(`xo-${run}@x.com`, 2, 'student');
 
-		courseId = (await courses.create(teacher, { title: 'Exam course' })).id;
-		const s = await sections.create(courseId, teacher, { title: 'S' });
+		courseId = (await courses.create(teacher, { titleEn: 'Exam course', titleAr: 'Exam course' })).id;
+		const s = await sections.create(courseId, teacher, { titleEn: 'S', titleAr: 'S' });
 		lessonId = (
 			await lessons.create(s.id, teacher, {
-				title: 'L',
+				titleEn: 'L', titleAr: 'L',
 				lessonType: 'text',
 			})
 		).id;
 		const exam = await exams.create(courseId, teacher, {
-			title: 'Final',
+			titleEn: 'Final', titleAr: 'Final',
 			passingScore: 3,
 			durationSec: 600,
 		});
 		examId = exam.id;
 		await exams.save(examId, teacher, {
-			title: 'Final',
+			titleEn: 'Final', titleAr: 'Final',
 			passingScore: 3,
 			durationSec: 600,
 			questions: [
 				{
-					text: 'Pick B',
+					textEn: 'Pick B', textAr: 'Pick B',
 					questionType: 'single_choice',
 					points: 2,
 					options: [
-						{ optionText: 'A', isCorrect: false },
-						{ optionText: 'B', isCorrect: true },
+						{ optionTextEn: 'A', optionTextAr: 'A', isCorrect: false },
+						{ optionTextEn: 'B', optionTextAr: 'B', isCorrect: true },
 					],
 				},
 				{
-					text: 'Pick even',
+					textEn: 'Pick even', textAr: 'Pick even',
 					questionType: 'multiple_choice',
 					points: 2,
 					options: [
-						{ optionText: '1', isCorrect: false },
-						{ optionText: '2', isCorrect: true },
-						{ optionText: '4', isCorrect: true },
+						{ optionTextEn: '1', optionTextAr: '1', isCorrect: false },
+						{ optionTextEn: '2', optionTextAr: '2', isCorrect: true },
+						{ optionTextEn: '4', optionTextAr: '4', isCorrect: true },
 					],
 				},
 			],
@@ -132,7 +132,7 @@ describe.skipIf(!process.env.SCRATCH_URL)('exam attempts (scratch db)', () => {
 			passingScore: 3,
 		});
 		expect(result.questions[0]).toMatchObject({ correct: false });
-		expect(result.questions[0].options.map((o) => [o.text, o.isCorrect, o.selected])).toEqual([
+		expect(result.questions[0].options.map((o) => [o.textEn, o.isCorrect, o.selected])).toEqual([
 			['A', false, true],
 			['B', true, false],
 		]);

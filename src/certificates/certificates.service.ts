@@ -39,11 +39,16 @@ export class CertificatesService {
 		const [user, course, lessons] = await Promise.all([
 			this.prisma.user.findUniqueOrThrow({
 				where: { id: userId },
-				select: { firstName: true, lastName: true },
+				select: {
+					firstName: true,
+					lastName: true,
+					firstNameAr: true,
+					lastNameAr: true,
+				},
 			}),
 			this.prisma.course.findUniqueOrThrow({
 				where: { id: courseId },
-				select: { title: true },
+				select: { titleEn: true, titleAr: true },
 			}),
 			this.prisma.lesson.aggregate({
 				where: {
@@ -53,6 +58,8 @@ export class CertificatesService {
 				_sum: { durationSec: true },
 			}),
 		]);
+
+		const holderNameAr = `${user.firstNameAr ?? ''} ${user.lastNameAr ?? ''}`.trim();
 
 		for (let attempt = 0; ; attempt++) {
 			try {
@@ -64,7 +71,9 @@ export class CertificatesService {
 						// The attempt that finished the course (the latest pass).
 						attemptId: attemptId ?? passed[0].id,
 						holderName: `${user.firstName} ${user.lastName}`.trim(),
-						courseTitle: course.title,
+						holderNameAr: holderNameAr || null,
+						courseTitleEn: course.titleEn,
+						courseTitleAr: course.titleAr,
 						learningSeconds: lessons._sum.durationSec ?? 0,
 					},
 				});
@@ -122,8 +131,10 @@ export class CertificatesService {
 		return {
 			code: row.code,
 			holderName: row.holderName,
+			holderNameAr: row.holderNameAr,
 			courseId: row.courseId,
-			courseTitle: row.courseTitle,
+			courseTitleEn: row.courseTitleEn,
+			courseTitleAr: row.courseTitleAr,
 			learningSeconds: row.learningSeconds,
 			issuedAt: row.issuedAt,
 		};

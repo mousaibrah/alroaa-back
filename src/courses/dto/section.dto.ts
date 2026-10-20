@@ -6,12 +6,23 @@ export class CreateSectionDto {
   @IsString()
   @MinLength(1)
   @MaxLength(255)
-  title: string;
+  titleEn: string;
+
+  @ApiProperty({ example: 'البداية', maxLength: 255 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  titleAr: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  description?: string;
+  descriptionEn?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
 }
 
 export class UpdateSectionDto extends PartialType(CreateSectionDto) {}

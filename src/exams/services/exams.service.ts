@@ -28,8 +28,10 @@ export class ExamsService {
     });
     return exams.map((exam) => ({
       id: exam.id,
-      title: exam.title,
-      description: exam.description,
+      titleEn: exam.titleEn,
+      titleAr: exam.titleAr,
+      descriptionEn: exam.descriptionEn,
+      descriptionAr: exam.descriptionAr,
       passingScore: Number(exam.passingScore),
       durationSec: exam.durationSec,
       questionCount: exam.questions.length,
@@ -41,8 +43,10 @@ export class ExamsService {
     const exam = await this.prisma.exam.create({
       data: {
         courseId,
-        title: dto.title,
-        description: dto.description,
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
         passingScore: dto.passingScore ?? 0,
         durationSec: dto.durationSec,
       },
@@ -87,8 +91,10 @@ export class ExamsService {
       await tx.exam.update({
         where: { id },
         data: {
-          title: dto.title,
-          description: dto.description ?? null,
+          titleEn: dto.titleEn,
+          titleAr: dto.titleAr,
+          descriptionEn: dto.descriptionEn ?? null,
+          descriptionAr: dto.descriptionAr ?? null,
           passingScore: dto.passingScore ?? 0,
           durationSec: dto.durationSec ?? null,
         },
@@ -114,7 +120,8 @@ export class ExamsService {
 
       for (const [qIndex, q] of dto.questions.entries()) {
         const questionData = {
-          text: q.text,
+          textEn: q.textEn,
+          textAr: q.textAr,
           questionType: q.questionType,
           points: q.points,
           sortOrder: qIndex,
@@ -148,7 +155,8 @@ export class ExamsService {
         }
         for (const [oIndex, o] of q.options.entries()) {
           const optionData = {
-            optionText: o.optionText,
+            optionTextEn: o.optionTextEn,
+            optionTextAr: o.optionTextAr,
             isCorrect: o.isCorrect,
             sortOrder: oIndex,
           };
@@ -189,18 +197,22 @@ export class ExamsService {
     return {
       id: exam.id,
       courseId: exam.courseId,
-      title: exam.title,
-      description: exam.description,
+      titleEn: exam.titleEn,
+      titleAr: exam.titleAr,
+      descriptionEn: exam.descriptionEn,
+      descriptionAr: exam.descriptionAr,
       passingScore: Number(exam.passingScore),
       durationSec: exam.durationSec,
       questions: exam.questions.map((q) => ({
         id: q.id,
-        text: q.text,
+        textEn: q.textEn,
+        textAr: q.textAr,
         questionType: q.questionType,
         points: Number(q.points),
         options: q.options.map((o) => ({
           id: o.id,
-          optionText: o.optionText,
+          optionTextEn: o.optionTextEn,
+          optionTextAr: o.optionTextAr,
           isCorrect: o.isCorrect,
         })),
       })),

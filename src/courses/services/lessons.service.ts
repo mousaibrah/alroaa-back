@@ -22,10 +22,13 @@ export class LessonsService {
     return this.prisma.lesson.create({
       data: {
         sectionId,
-        title: dto.title,
-        description: dto.description,
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
         lessonType: dto.lessonType,
-        contentUrl: dto.contentUrl,
+        contentUrlEn: dto.contentUrlEn,
+        contentUrlAr: dto.contentUrlAr,
         durationSec: dto.durationSec,
         isPreview: dto.isPreview ?? false,
         sortOrder: (last._max.sortOrder ?? -1) + 1,
@@ -38,10 +41,13 @@ export class LessonsService {
     return this.prisma.lesson.update({
       where: { id },
       data: {
-        title: dto.title,
-        description: dto.description,
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
         lessonType: dto.lessonType,
-        contentUrl: dto.contentUrl,
+        contentUrlEn: dto.contentUrlEn,
+        contentUrlAr: dto.contentUrlAr,
         durationSec: dto.durationSec,
         isPreview: dto.isPreview,
       },

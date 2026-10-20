@@ -57,52 +57,52 @@ describe.skipIf(!process.env.SCRATCH_URL)(
     afterAll(() => prisma?.$disconnect());
 
     it('courses, sections, lessons, reorder, ownership', async () => {
-      const c1 = await courses.create(teacher, { title: 'Intro TS!' });
-      const c2 = await courses.create(teacher, { title: 'Intro TS!' });
+      const c1 = await courses.create(teacher, { titleEn: 'Intro TS!', titleAr: 'Intro TS!' });
+      const c2 = await courses.create(teacher, { titleEn: 'Intro TS!', titleAr: 'Intro TS!' });
       expect(c1.slug).toMatch(/^intro-ts/);
       expect(c2.slug).not.toBe(c1.slug);
-      const ar = await courses.create(teacher, { title: 'دورة جافاسكربت' });
+      const ar = await courses.create(teacher, { titleEn: 'دورة جافاسكربت', titleAr: 'دورة جافاسكربت' });
       expect(ar.slug).toMatch(/^دورة-جافاسكربت/);
 
-      const s1 = await sections.create(c1.id, teacher, { title: 'S1' });
-      const s2 = await sections.create(c1.id, teacher, { title: 'S2' });
+      const s1 = await sections.create(c1.id, teacher, { titleEn: 'S1', titleAr: 'S1' });
+      const s2 = await sections.create(c1.id, teacher, { titleEn: 'S2', titleAr: 'S2' });
       expect([s1.sortOrder, s2.sortOrder]).toEqual([0, 1]);
       await sections.reorder(c1.id, teacher, [s2.id, s1.id]);
 
       const l1 = await lessons.create(s1.id, teacher, {
-        title: 'L1',
+        titleEn: 'L1', titleAr: 'L1',
         lessonType: 'video',
         durationSec: 100,
-        contentUrl: 'https://x.com/1.mp4',
+        contentUrlEn: 'https://x.com/1.mp4',
       });
       const l2 = await lessons.create(s1.id, teacher, {
-        title: 'L2',
+        titleEn: 'L2', titleAr: 'L2',
         lessonType: 'video',
         durationSec: 100,
-        contentUrl: 'https://x.com/2.mp4',
+        contentUrlEn: 'https://x.com/2.mp4',
       });
       const l3 = await lessons.create(s2.id, teacher, {
-        title: 'L3',
+        titleEn: 'L3', titleAr: 'L3',
         lessonType: 'text',
       });
       await lessons.reorder(s1.id, teacher, [l2.id, l1.id]);
 
       await expect(
-        sections.create(c1.id, other, { title: 'no' }),
+        sections.create(c1.id, other, { titleEn: 'no', titleAr: 'no' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       await expect(
         lessons.reorder(s1.id, teacher, [l1.id]),
       ).rejects.toBeInstanceOf(BadRequestException);
-      await sections.create(c1.id, admin, { title: 'admin can' });
+      await sections.create(c1.id, admin, { titleEn: 'admin can', titleAr: 'admin can' });
 
       const detail = await courses.get(c1.id, teacher);
       // sections: s2, s1, admin-section ; s1 lessons: l2, l1
-      expect(detail.sections.map((s) => s.title)).toEqual([
+      expect(detail.sections.map((s) => s.titleEn)).toEqual([
         'S2',
         'S1',
         'admin can',
       ]);
-      expect(detail.sections[1].lessons.map((l) => l.title)).toEqual([
+      expect(detail.sections[1].lessons.map((l) => l.titleEn)).toEqual([
         'L2',
         'L1',
       ]);
@@ -135,7 +135,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       // play order: S2 (empty now), S1: L2, L1
       let view = await courses.get(c1.id, student);
       const flat = view.sections.flatMap((s) => s.lessons);
-      expect(flat.map((l) => [l.title, l.locked, l.playable])).toEqual([
+      expect(flat.map((l) => [l.titleEn, l.locked, l.playable])).toEqual([
         ['L2', false, true],
         ['L1', true, false],
       ]);
@@ -155,7 +155,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       expect(
         view.sections
           .flatMap((s) => s.lessons)
-          .map((l) => [l.title, l.locked, l.completed]),
+          .map((l) => [l.titleEn, l.locked, l.completed]),
       ).toEqual([
         ['L2', false, true],
         ['L1', false, false],
@@ -170,87 +170,87 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       // soft-deleted section hides its lessons
       await sections.remove(s1.id, teacher);
       expect(
-        (await courses.get(c1.id, teacher)).sections.map((s) => s.title),
+        (await courses.get(c1.id, teacher)).sections.map((s) => s.titleEn),
       ).toEqual(['S2', 'admin can']);
     });
 
     it('exam builder: save, edit, reorder, remove, validate', async () => {
-      const course = await courses.create(teacher, { title: 'Exam course' });
+      const course = await courses.create(teacher, { titleEn: 'Exam course', titleAr: 'Exam course' });
       const created = await exams.create(course.id, teacher, {
-        title: 'Final',
+        titleEn: 'Final', titleAr: 'Final',
         passingScore: 2,
       });
       expect(created.questions).toEqual([]);
 
       const saved = await exams.save(created.id, teacher, {
-        title: 'Final v2',
+        titleEn: 'Final v2', titleAr: 'Final v2',
         passingScore: 2,
         durationSec: 600,
         questions: [
           {
-            text: 'Q1',
+            textEn: 'Q1', textAr: 'Q1',
             questionType: 'single_choice',
             points: 2,
             options: [
-              { optionText: 'a', isCorrect: true },
-              { optionText: 'b', isCorrect: false },
+              { optionTextEn: 'a', optionTextAr: 'a', isCorrect: true },
+              { optionTextEn: 'b', optionTextAr: 'b', isCorrect: false },
             ],
           },
           {
-            text: 'Q2',
+            textEn: 'Q2', textAr: 'Q2',
             questionType: 'true_false',
             points: 1,
             options: [
-              { optionText: 'True', isCorrect: false },
-              { optionText: 'False', isCorrect: true },
+              { optionTextEn: 'True', optionTextAr: 'True', isCorrect: false },
+              { optionTextEn: 'False', optionTextAr: 'False', isCorrect: true },
             ],
           },
           {
-            text: 'Q3',
+            textEn: 'Q3', textAr: 'Q3',
             questionType: 'multiple_choice',
             points: 1,
             options: [
-              { optionText: 'x', isCorrect: true },
-              { optionText: 'y', isCorrect: true },
-              { optionText: 'z', isCorrect: false },
+              { optionTextEn: 'x', optionTextAr: 'x', isCorrect: true },
+              { optionTextEn: 'y', optionTextAr: 'y', isCorrect: true },
+              { optionTextEn: 'z', optionTextAr: 'z', isCorrect: false },
             ],
           },
         ],
       });
-      expect(saved.questions.map((q) => q.text)).toEqual(['Q1', 'Q2', 'Q3']);
+      expect(saved.questions.map((q) => q.textEn)).toEqual(['Q1', 'Q2', 'Q3']);
       expect(saved.durationSec).toBe(600);
 
       // reorder (Q3 first), edit Q1 text, drop Q2, drop option 'z', add option 'w'
       const [q1, , q3] = saved.questions;
       const edited = await exams.save(created.id, teacher, {
-        title: 'Final v2',
+        titleEn: 'Final v2', titleAr: 'Final v2',
         passingScore: 1,
         questions: [
           {
             id: q3.id,
-            text: 'Q3',
+            textEn: 'Q3', textAr: 'Q3',
             questionType: 'multiple_choice',
             points: 1,
             options: [
-              { id: q3.options[0].id, optionText: 'x', isCorrect: true },
-              { id: q3.options[1].id, optionText: 'y', isCorrect: false },
-              { optionText: 'w', isCorrect: false },
+              { id: q3.options[0].id, optionTextEn: 'x', optionTextAr: 'x', isCorrect: true },
+              { id: q3.options[1].id, optionTextEn: 'y', optionTextAr: 'y', isCorrect: false },
+              { optionTextEn: 'w', optionTextAr: 'w', isCorrect: false },
             ],
           },
           {
             id: q1.id,
-            text: 'Q1 edited',
+            textEn: 'Q1 edited', textAr: 'Q1 edited',
             questionType: 'single_choice',
             points: 2,
             options: [
-              { id: q1.options[0].id, optionText: 'a', isCorrect: true },
-              { id: q1.options[1].id, optionText: 'b', isCorrect: false },
+              { id: q1.options[0].id, optionTextEn: 'a', optionTextAr: 'a', isCorrect: true },
+              { id: q1.options[1].id, optionTextEn: 'b', optionTextAr: 'b', isCorrect: false },
             ],
           },
         ],
       });
-      expect(edited.questions.map((q) => q.text)).toEqual(['Q3', 'Q1 edited']);
-      expect(edited.questions[0].options.map((o) => o.optionText)).toEqual([
+      expect(edited.questions.map((q) => q.textEn)).toEqual(['Q3', 'Q1 edited']);
+      expect(edited.questions[0].options.map((o) => o.optionTextEn)).toEqual([
         'x',
         'y',
         'w',
@@ -263,23 +263,23 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       // ids from another exam are rejected
       await expect(
         exams.save(created.id, teacher, {
-          title: 't',
+          titleEn: 't', titleAr: 't',
           questions: [
             {
               id: 999999,
-              text: 'q',
+              textEn: 'q', textAr: 'q',
               questionType: 'single_choice',
               points: 1,
               options: [
-                { optionText: 'a', isCorrect: true },
-                { optionText: 'b', isCorrect: false },
+                { optionTextEn: 'a', optionTextAr: 'a', isCorrect: true },
+                { optionTextEn: 'b', optionTextAr: 'b', isCorrect: false },
               ],
             },
           ],
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
       await expect(
-        exams.save(created.id, other, { title: 't', questions: [] }),
+        exams.save(created.id, other, { titleEn: 't', titleAr: 't', questions: [] }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       await exams.remove(created.id, admin);
       expect(await exams.listForCourse(course.id, admin)).toHaveLength(0);
@@ -287,27 +287,27 @@ describe.skipIf(!process.env.SCRATCH_URL)(
 
     it('course page lists exams, locked until enrolled and all lessons are done', async () => {
       const course = await courses.create(teacher, {
-        title: 'Exam lock course',
+        titleEn: 'Exam lock course', titleAr: 'Exam lock course',
       });
-      const sec = await sections.create(course.id, teacher, { title: 'S' });
+      const sec = await sections.create(course.id, teacher, { titleEn: 'S', titleAr: 'S' });
       const lesson = await lessons.create(sec.id, teacher, {
-        title: 'L',
+        titleEn: 'L', titleAr: 'L',
         lessonType: 'video',
         durationSec: 100,
-        contentUrl: 'https://x.com/v.mp4',
+        contentUrlEn: 'https://x.com/v.mp4',
       });
-      const exam = await exams.create(course.id, teacher, { title: 'Quiz' });
+      const exam = await exams.create(course.id, teacher, { titleEn: 'Quiz', titleAr: 'Quiz' });
       await exams.save(exam.id, teacher, {
-        title: 'Quiz',
+        titleEn: 'Quiz', titleAr: 'Quiz',
         passingScore: 0,
         questions: [
           {
-            text: 'secret question',
+            textEn: 'secret question', textAr: 'secret question',
             questionType: 'single_choice',
             points: 1,
             options: [
-              { optionText: 'right', isCorrect: true },
-              { optionText: 'wrong', isCorrect: false },
+              { optionTextEn: 'right', optionTextAr: 'right', isCorrect: true },
+              { optionTextEn: 'wrong', optionTextAr: 'wrong', isCorrect: false },
             ],
           },
         ],
@@ -317,7 +317,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       // Not enrolled: visible but locked, and never any questions or answers.
       const visitor = await courses.get(course.id, student);
       expect(visitor.exams).toMatchObject([
-        { title: 'Quiz', questionCount: 1, locked: true },
+        { titleEn: 'Quiz', titleAr: 'Quiz', questionCount: 1, locked: true },
       ]);
       expect(JSON.stringify(visitor.exams)).not.toMatch(
         /secret question|right|isCorrect/,

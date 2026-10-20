@@ -28,7 +28,7 @@ export class CoursesService {
   ) {}
 
   async create(user: JwtPayload, dto: CreateCourseDto) {
-    const base = slugify(dto.title);
+    const base = slugify(dto.titleEn);
     for (let attempt = 0; ; attempt++) {
       const slug =
         attempt === 0
@@ -37,9 +37,11 @@ export class CoursesService {
       try {
         const course = await this.prisma.course.create({
           data: {
-            title: dto.title,
+            titleEn: dto.titleEn,
+            titleAr: dto.titleAr,
             slug,
-            description: dto.description,
+            descriptionEn: dto.descriptionEn,
+            descriptionAr: dto.descriptionAr,
             price: dto.price,
             currency: dto.currency,
             thumbnailUrl: dto.thumbnailUrl,
@@ -196,8 +198,10 @@ export class CoursesService {
         : null,
       exams: examRows.map((exam) => ({
         id: exam.id,
-        title: exam.title,
-        description: exam.description,
+        titleEn: exam.titleEn,
+        titleAr: exam.titleAr,
+        descriptionEn: exam.descriptionEn,
+        descriptionAr: exam.descriptionAr,
         passingScore: Number(exam.passingScore),
         durationSec: exam.durationSec,
         questionCount: exam._count.questions,
@@ -206,13 +210,17 @@ export class CoursesService {
       })),
       sections: course.sections.map((section) => ({
         id: section.id,
-        title: section.title,
-        description: section.description,
+        titleEn: section.titleEn,
+        titleAr: section.titleAr,
+        descriptionEn: section.descriptionEn,
+        descriptionAr: section.descriptionAr,
         sortOrder: section.sortOrder,
         lessons: section.lessons.map((lesson) => ({
           id: lesson.id,
-          title: lesson.title,
-          description: lesson.description,
+          titleEn: lesson.titleEn,
+          titleAr: lesson.titleAr,
+          descriptionEn: lesson.descriptionEn,
+          descriptionAr: lesson.descriptionAr,
           lessonType: lesson.lessonType,
           durationSec: lesson.durationSec,
           sortOrder: lesson.sortOrder,
@@ -225,13 +233,14 @@ export class CoursesService {
           // The learner may watch it now (the player then asks for a signed,
           // short-lived URL at GET /lessons/:id/playback).
           playable:
-            lesson.contentUrl !== null &&
+            (lesson.contentUrlEn !== null || lesson.contentUrlAr !== null) &&
             hasAccess &&
             !isLocked(lesson.id) &&
             (paid || lesson.isPreview),
           // The stored video address is private: only the people who edit the
           // course get it (the lesson form needs it). Learners never do.
-          contentUrl: manages ? lesson.contentUrl : null,
+          contentUrlEn: manages ? lesson.contentUrlEn : null,
+          contentUrlAr: manages ? lesson.contentUrlAr : null,
         })),
       })),
     };
@@ -242,8 +251,10 @@ export class CoursesService {
     const course = await this.prisma.course.update({
       where: { id },
       data: {
-        title: dto.title,
-        description: dto.description,
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
         price: dto.price,
         currency: dto.currency,
         thumbnailUrl: dto.thumbnailUrl,

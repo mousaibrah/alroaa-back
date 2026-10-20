@@ -75,7 +75,7 @@ describe('PlaybackService.resolve', () => {
         ? {
             id: 2,
             lessonType: 'video',
-            contentUrl: 'https://cdn.x/2.mp4',
+            contentUrlEn: 'https://cdn.x/2.mp4',
             isPreview: false,
             section: {
               courseId: 1,
@@ -139,7 +139,7 @@ describe('PlaybackService.resolve', () => {
     const paidCourse = (isPreview: boolean) => ({
       id: 2,
       lessonType: 'video',
-      contentUrl: 'https://cdn.x/2.mp4',
+      contentUrlEn: 'https://cdn.x/2.mp4',
       isPreview,
       section: {
         courseId: 1,
@@ -163,7 +163,7 @@ describe('PlaybackService.resolve', () => {
     const draft = {
       id: 2,
       lessonType: 'video',
-      contentUrl: 'https://cdn.x/2.mp4',
+      contentUrlEn: 'https://cdn.x/2.mp4',
       isPreview: false,
       section: {
         courseId: 1,
@@ -182,7 +182,7 @@ describe('PlaybackService.resolve', () => {
     const noVideo = (extra: object) => ({
       id: 2,
       lessonType: 'video',
-      contentUrl: 'https://cdn.x/2.mp4',
+      contentUrlEn: 'https://cdn.x/2.mp4',
       isPreview: false,
       section: {
         courseId: 1,
@@ -194,7 +194,7 @@ describe('PlaybackService.resolve', () => {
       make({ lesson: noVideo({ lessonType: 'text' }) }).resolve(2, author),
     ).rejects.toBeInstanceOf(NotFoundException);
     await expect(
-      make({ lesson: noVideo({ contentUrl: null }) }).resolve(2, author),
+      make({ lesson: noVideo({ contentUrlEn: null }) }).resolve(2, author),
     ).rejects.toBeInstanceOf(NotFoundException);
     await expect(
       make({ lesson: null }).resolve(2, author),

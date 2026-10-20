@@ -89,13 +89,20 @@ export class EnrollmentsService {
       include: {
         ...include,
         course: {
-          select: { price: true, currency: true, title: true, slug: true },
+          select: {
+            price: true,
+            currency: true,
+            titleEn: true,
+            titleAr: true,
+            slug: true,
+          },
         },
       },
     });
     return rows.map((row) => ({
       ...toView(row),
-      courseTitle: row.course.title,
+      courseTitleEn: row.course.titleEn,
+      courseTitleAr: row.course.titleAr,
       courseSlug: row.course.slug,
     }));
   }

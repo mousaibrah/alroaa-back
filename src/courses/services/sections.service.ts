@@ -22,8 +22,10 @@ export class SectionsService {
     return this.prisma.courseSection.create({
       data: {
         courseId,
-        title: dto.title,
-        description: dto.description,
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
         sortOrder: (last._max.sortOrder ?? -1) + 1,
       },
     });
@@ -33,7 +35,12 @@ export class SectionsService {
     await this.access.sectionForManage(id, user);
     return this.prisma.courseSection.update({
       where: { id },
-      data: { title: dto.title, description: dto.description },
+      data: {
+        titleEn: dto.titleEn,
+        titleAr: dto.titleAr,
+        descriptionEn: dto.descriptionEn,
+        descriptionAr: dto.descriptionAr,
+      },
     });
   }
 

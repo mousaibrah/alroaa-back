@@ -4,10 +4,16 @@ export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false';
 
 export interface GradableQuestion {
   id: number;
-  text: string;
+  textEn: string;
+  textAr: string;
   questionType: QuestionType;
   points: number;
-  options: { id: number; optionText: string; isCorrect: boolean }[];
+  options: {
+    id: number;
+    optionTextEn: string;
+    optionTextAr: string;
+    isCorrect: boolean;
+  }[];
 }
 
 export interface AnswerInput {
@@ -17,7 +23,8 @@ export interface AnswerInput {
 
 export interface ReviewQuestion {
   id: number;
-  text: string;
+  textEn: string;
+  textAr: string;
   questionType: QuestionType;
   points: number;
   earned: number;
@@ -25,7 +32,8 @@ export interface ReviewQuestion {
   correct: boolean;
   options: {
     id: number;
-    text: string;
+    textEn: string;
+    textAr: string;
     isCorrect: boolean;
     selected: boolean;
   }[];

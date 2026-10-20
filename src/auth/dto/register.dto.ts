@@ -24,6 +24,18 @@ export class RegisterDto {
   @MaxLength(100)
   lastName: string;
 
+  @ApiPropertyOptional({ example: 'جون', maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  firstNameAr?: string;
+
+  @ApiPropertyOptional({ example: 'دو', maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  lastNameAr?: string;
+
   @ApiProperty({ example: 'john.doe@example.com' })
   @IsEmail()
   @MaxLength(255)

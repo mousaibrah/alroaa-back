@@ -68,7 +68,8 @@ export const gradeExam = (
     maxScore += q.points;
     return {
       id: q.id,
-      text: q.text,
+      textEn: q.textEn,
+      textAr: q.textAr,
       questionType: q.questionType,
       points: q.points,
       earned,
@@ -76,7 +77,8 @@ export const gradeExam = (
       correct,
       options: q.options.map((o) => ({
         id: o.id,
-        text: o.optionText,
+        textEn: o.optionTextEn,
+        textAr: o.optionTextAr,
         isCorrect: o.isCorrect,
         selected: picks.has(o.id),
       })),

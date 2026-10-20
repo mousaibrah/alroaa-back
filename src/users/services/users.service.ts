@@ -57,6 +57,8 @@ export class UsersService {
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
+        firstNameAr: data.firstNameAr,
+        lastNameAr: data.lastNameAr,
         email: data.email,
         password: data.password,
         image: data.image,

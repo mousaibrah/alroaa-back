@@ -156,13 +156,19 @@ export class AttemptsService {
 	): Promise<ExamAttempt> {
 		const exam = await this.prisma.exam.findUniqueOrThrow({
 			where: { id: attempt.examId },
-			select: { title: true, courseId: true, passingScore: true },
+			select: {
+				titleEn: true,
+				titleAr: true,
+				courseId: true,
+				passingScore: true,
+			},
 		});
 		const questions = await this.loadQuestions(attempt.examId);
 		const graded: Graded = gradeExam(questions, selected);
 		const passingScore = Number(exam.passingScore);
 		const result: StoredResult = {
-			examTitle: exam.title,
+			examTitleEn: exam.titleEn,
+			examTitleAr: exam.titleAr,
 			courseId: exam.courseId,
 			passingScore,
 			questions: graded.questions,
@@ -209,7 +215,8 @@ export class AttemptsService {
 		});
 		return rows.map((q) => ({
 			id: q.id,
-			text: q.text,
+			textEn: q.textEn,
+			textAr: q.textAr,
 			questionType: q.questionType,
 			points: Number(q.points),
 			options: q.options,
@@ -222,7 +229,13 @@ export class AttemptsService {
 	private async takingView(attempt: ExamAttempt) {
 		const exam = await this.prisma.exam.findUniqueOrThrow({
 			where: { id: attempt.examId },
-			select: { id: true, title: true, courseId: true, passingScore: true },
+			select: {
+				id: true,
+				titleEn: true,
+				titleAr: true,
+				courseId: true,
+				passingScore: true,
+			},
 		});
 		const questions = await this.loadQuestions(attempt.examId);
 		return {
@@ -230,7 +243,8 @@ export class AttemptsService {
 			status: attempt.status,
 			examId: exam.id,
 			courseId: exam.courseId,
-			examTitle: exam.title,
+			examTitleEn: exam.titleEn,
+			examTitleAr: exam.titleAr,
 			passingScore: Number(exam.passingScore),
 			startedAt: attempt.startedAt,
 			expiresAt: attempt.expiresAt,
@@ -238,10 +252,15 @@ export class AttemptsService {
 			serverNow: new Date(),
 			questions: questions.map((q) => ({
 				id: q.id,
-				text: q.text,
+				textEn: q.textEn,
+				textAr: q.textAr,
 				questionType: q.questionType,
 				points: q.points,
-				options: q.options.map((o) => ({ id: o.id, text: o.optionText })),
+				options: q.options.map((o) => ({
+					id: o.id,
+					textEn: o.optionTextEn,
+					textAr: o.optionTextAr,
+				})),
 			})),
 		};
 	}
@@ -256,7 +275,8 @@ export class AttemptsService {
 			status: attempt.status,
 			examId: attempt.examId,
 			courseId: result.courseId,
-			examTitle: result.examTitle,
+			examTitleEn: result.examTitleEn,
+			examTitleAr: result.examTitleAr,
 			passingScore: result.passingScore,
 			startedAt: attempt.startedAt,
 			submittedAt: attempt.submittedAt,

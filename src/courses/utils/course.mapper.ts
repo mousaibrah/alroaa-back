@@ -3,9 +3,11 @@ import type { Course } from '../../generated/prisma/client.js';
 // Prisma returns Decimal for price; the API exposes a plain number.
 export const toCourse = (course: Course) => ({
   id: course.id,
-  title: course.title,
+  titleEn: course.titleEn,
+  titleAr: course.titleAr,
   slug: course.slug,
-  description: course.description,
+  descriptionEn: course.descriptionEn,
+  descriptionAr: course.descriptionAr,
   price: Number(course.price),
   currency: course.currency,
   status: course.status,

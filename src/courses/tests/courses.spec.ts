@@ -122,7 +122,7 @@ describe('SectionsService', () => {
     prisma.courseSection.aggregate.mockResolvedValue({
       _max: { sortOrder: 4 },
     });
-    await service.create(10, user(5), { title: 'New' });
+    await service.create(10, user(5), { titleEn: 'New', titleAr: 'New' });
     expect(prisma.courseSection.create.mock.calls[0][0].data.sortOrder).toBe(5);
   });
 
@@ -131,7 +131,7 @@ describe('SectionsService', () => {
     prisma.courseSection.aggregate.mockResolvedValue({
       _max: { sortOrder: null },
     });
-    await service.create(10, user(5), { title: 'First' });
+    await service.create(10, user(5), { titleEn: 'First', titleAr: 'First' });
     expect(prisma.courseSection.create.mock.calls[0][0].data.sortOrder).toBe(0);
   });
 });

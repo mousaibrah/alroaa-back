@@ -17,7 +17,7 @@ const row = {
 
 function setup(over: Record<string, unknown> = {}) {
 	const prisma = {
-		course: { findFirst: vi.fn().mockResolvedValue({ id: 1 }), findUniqueOrThrow: vi.fn().mockResolvedValue({ title: 'Intro' }) },
+		course: { findFirst: vi.fn().mockResolvedValue({ id: 1 }), findUniqueOrThrow: vi.fn().mockResolvedValue({ titleEn: 'Intro', titleAr: 'Intro' }) },
 		certificate: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue(row) },
 		exam: { findMany: vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]) },
 		examAttempt: { findMany: vi.fn().mockResolvedValue([{ id: 9 }, { id: 4 }]) },

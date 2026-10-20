@@ -123,19 +123,21 @@ model RolePermission {
 // Users
 // ---------------------------------------------------------------
 model User {
-  id        Int       @id @default(autoincrement())
-  firstName String    @map("first_name") @db.VarChar(100)
-  lastName  String    @map("last_name") @db.VarChar(100)
-  email     String    @unique @db.VarChar(255)
-  password  String    @db.VarChar(255) // bcrypt hash
-  image     String?
-  gender    BigInt? // 0 = male, 1 = female
-  dob       DateTime? @db.Date
-  roleId    Int       @map("role_id")
-  isDeleted Boolean   @default(false) @map("is_deleted")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  role      Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  id          Int       @id @default(autoincrement())
+  firstName   String    @map("first_name") @db.VarChar(100)
+  lastName    String    @map("last_name") @db.VarChar(100)
+  firstNameAr String?   @map("first_name_ar") @db.VarChar(100)
+  lastNameAr  String?   @map("last_name_ar") @db.VarChar(100)
+  email       String    @unique @db.VarChar(255)
+  password    String    @db.VarChar(255) // bcrypt hash
+  image       String?
+  gender      BigInt? // 0 = male, 1 = female
+  dob         DateTime? @db.Date
+  roleId      Int       @map("role_id")
+  isDeleted   Boolean   @default(false) @map("is_deleted")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
   courses        Course[]
   payments       Payment[]
@@ -152,19 +154,21 @@ model User {
 // Courses
 // ---------------------------------------------------------------
 model Course {
-  id           Int          @id @default(autoincrement())
-  title        String       @db.VarChar(255)
-  slug         String       @unique @db.VarChar(255)
-  description  String?
-  price        Decimal      @default(0) @db.Decimal(10, 2)
-  currency     String       @default("USD") @db.Char(3)
-  status       CourseStatus @default(draft)
-  authorId     Int          @map("author_id")
-  thumbnailUrl String?      @map("thumbnail_url")
-  isDeleted    Boolean      @default(false) @map("is_deleted")
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
-  author       User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  id            Int          @id @default(autoincrement())
+  titleEn       String       @map("title_en") @db.VarChar(255)
+  titleAr       String       @map("title_ar") @db.VarChar(255)
+  slug          String       @unique @db.VarChar(255)
+  descriptionEn String?      @map("description_en")
+  descriptionAr String?      @map("description_ar")
+  price         Decimal      @default(0) @db.Decimal(10, 2)
+  currency      String       @default("USD") @db.Char(3)
+  status        CourseStatus @default(draft)
+  authorId      Int          @map("author_id")
+  thumbnailUrl  String?      @map("thumbnail_url")
+  isDeleted     Boolean      @default(false) @map("is_deleted")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  author        User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   sections     CourseSection[]
   exams        Exam[]
@@ -177,15 +181,17 @@ model Course {
 }
 
 model CourseSection {
-  id          Int      @id @default(autoincrement())
-  courseId    Int      @map("course_id")
-  title       String   @db.VarChar(255)
-  description String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  isDeleted   Boolean  @default(false) @map("is_deleted")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id            Int      @id @default(autoincrement())
+  courseId      Int      @map("course_id")
+  titleEn       String   @map("title_en") @db.VarChar(255)
+  titleAr       String   @map("title_ar") @db.VarChar(255)
+  descriptionEn String?  @map("description_en")
+  descriptionAr String?  @map("description_ar")
+  sortOrder     Int      @default(0) @map("sort_order")
+  isDeleted     Boolean  @default(false) @map("is_deleted")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   lessons Lesson[]
 
@@ -194,19 +200,22 @@ model CourseSection {
 }
 
 model Lesson {
-  id          Int           @id @default(autoincrement())
-  sectionId   Int           @map("section_id")
-  title       String        @db.VarChar(255)
-  description String?
-  lessonType  LessonType    @map("lesson_type")
-  contentUrl  String?       @map("content_url")
-  durationSec Int?          @map("duration_sec")
-  sortOrder   Int           @default(0) @map("sort_order")
-  isPreview   Boolean       @default(false) @map("is_preview")
-  isDeleted   Boolean       @default(false) @map("is_deleted")
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  section     CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id            Int           @id @default(autoincrement())
+  sectionId     Int           @map("section_id")
+  titleEn       String        @map("title_en") @db.VarChar(255)
+  titleAr       String        @map("title_ar") @db.VarChar(255)
+  descriptionEn String?       @map("description_en")
+  descriptionAr String?       @map("description_ar")
+  lessonType    LessonType    @map("lesson_type")
+  contentUrlEn  String?       @map("content_url_en")
+  contentUrlAr  String?       @map("content_url_ar")
+  durationSec   Int?          @map("duration_sec")
+  sortOrder     Int           @default(0) @map("sort_order")
+  isPreview     Boolean       @default(false) @map("is_preview")
+  isDeleted     Boolean       @default(false) @map("is_deleted")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  section       CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   progress LessonProgress[]
 
@@ -218,16 +227,18 @@ model Lesson {
 // Exams
 // ---------------------------------------------------------------
 model Exam {
-  id           Int      @id @default(autoincrement())
-  courseId     Int      @map("course_id")
-  title        String   @db.VarChar(255)
-  description  String?
-  passingScore Decimal  @default(0) @map("passing_score") @db.Decimal(5, 2)
-  durationSec  Int?     @map("duration_sec")
-  isDeleted    Boolean  @default(false) @map("is_deleted")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id            Int      @id @default(autoincrement())
+  courseId      Int      @map("course_id")
+  titleEn       String   @map("title_en") @db.VarChar(255)
+  titleAr       String   @map("title_ar") @db.VarChar(255)
+  descriptionEn String?  @map("description_en")
+  descriptionAr String?  @map("description_ar")
+  passingScore  Decimal  @default(0) @map("passing_score") @db.Decimal(5, 2)
+  durationSec   Int?     @map("duration_sec")
+  isDeleted     Boolean  @default(false) @map("is_deleted")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   questions Question[]
   attempts  ExamAttempt[]
@@ -239,7 +250,8 @@ model Exam {
 model Question {
   id           Int          @id @default(autoincrement())
   examId       Int          @map("exam_id")
-  text         String
+  textEn       String       @map("text_en")
+  textAr       String       @map("text_ar")
   questionType QuestionType @map("question_type")
   points       Decimal      @default(1) @db.Decimal(5, 2)
   sortOrder    Int          @default(0) @map("sort_order")
@@ -255,15 +267,16 @@ model Question {
 }
 
 model QuestionOption {
-  id         Int      @id @default(autoincrement())
-  questionId Int      @map("question_id")
-  optionText String   @map("option_text")
-  isCorrect  Boolean  @default(false) @map("is_correct")
-  sortOrder  Int      @default(0) @map("sort_order")
-  isDeleted  Boolean  @default(false) @map("is_deleted")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  id           Int      @id @default(autoincrement())
+  questionId   Int      @map("question_id")
+  optionTextEn String   @map("option_text_en")
+  optionTextAr String   @map("option_text_ar")
+  isCorrect    Boolean  @default(false) @map("is_correct")
+  sortOrder    Int      @default(0) @map("sort_order")
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@index([questionId], map: "idx_question_options_question_id")
   @@map("question_options")
@@ -396,7 +409,9 @@ model Certificate {
   courseId        Int          @map("course_id")
   attemptId       Int?         @map("attempt_id")
   holderName      String       @map("holder_name") @db.VarChar(255)
-  courseTitle     String       @map("course_title") @db.VarChar(255)
+  holderNameAr    String?      @map("holder_name_ar") @db.VarChar(255)
+  courseTitleEn   String       @map("course_title_en") @db.VarChar(255)
+  courseTitleAr   String       @map("course_title_ar") @db.VarChar(255)
   learningSeconds Int          @default(0) @map("learning_seconds")
   issuedAt        DateTime     @default(now()) @map("issued_at") @db.Timestamptz(6)
   isDeleted       Boolean      @default(false) @map("is_deleted")

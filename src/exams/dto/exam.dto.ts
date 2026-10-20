@@ -22,12 +22,23 @@ export class CreateExamDto {
   @IsString()
   @MinLength(1)
   @MaxLength(255)
-  title: string;
+  titleEn: string;
+
+  @ApiProperty({ maxLength: 255 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  titleAr: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  description?: string;
+  descriptionEn?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -52,7 +63,12 @@ export class OptionInputDto {
   @ApiProperty()
   @IsString()
   @MinLength(1)
-  optionText: string;
+  optionTextEn: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  optionTextAr: string;
 
   @ApiProperty()
   @IsBoolean()
@@ -68,7 +84,12 @@ export class QuestionInputDto {
   @ApiProperty()
   @IsString()
   @MinLength(1)
-  text: string;
+  textEn: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  textAr: string;
 
   @ApiProperty({ enum: QuestionType })
   @IsEnum(QuestionType)

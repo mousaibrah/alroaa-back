@@ -64,6 +64,8 @@ export class AuthService {
       user = await this.usersService.create({
         firstName: dto.firstName,
         lastName: dto.lastName,
+        firstNameAr: dto.firstNameAr ?? null,
+        lastNameAr: dto.lastNameAr ?? null,
         email,
         password: await bcrypt.hash(dto.password, SALT_ROUNDS),
         image: dto.image ?? null,

@@ -4,6 +4,8 @@ import type { Gender } from '../types/user.entity.js';
 export class CreateUserDto {
   firstName: string;
   lastName: string;
+  firstNameAr?: string | null;
+  lastNameAr?: string | null;
   email: string;
   password: string;
   image: string | null;

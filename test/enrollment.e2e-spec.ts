@@ -55,17 +55,18 @@ describe.skipIf(!process.env.SCRATCH_URL)(
       student = await mk(`es-${run}@x.com`, 2, 'student');
 
       const course = await courses.create(teacher, {
-        title: 'Paid course',
+        titleEn: 'Paid course', titleAr: 'Paid course',
         price: 50,
       });
       courseId = course.id;
-      const s = await sections.create(courseId, teacher, { title: 'S' });
+      const s = await sections.create(courseId, teacher, { titleEn: 'S', titleAr: 'S' });
       const mkLesson = (title: string, isPreview: boolean) =>
         lessons.create(s.id, teacher, {
-          title,
+          titleEn: title,
+          titleAr: title,
           lessonType: 'video',
           durationSec: 100,
-          contentUrl: `https://x.com/${title}.mp4`,
+          contentUrlEn: `https://x.com/${title}.mp4`,
           isPreview,
         });
       free1 = (await mkLesson('free1', true)).id;
@@ -150,12 +151,12 @@ describe.skipIf(!process.env.SCRATCH_URL)(
         'https://x.com/paid2.mp4',
       );
       // the stored address stays private: learners never get it, authors do
-      expect((await lessonsOf()).every((l) => l.contentUrl === null)).toBe(
+      expect((await lessonsOf()).every((l) => l.contentUrlEn === null)).toBe(
         true,
       );
       const authorView = await courses.get(courseId, teacher);
       expect(
-        authorView.sections.flatMap((x) => x.lessons).map((l) => l.contentUrl),
+        authorView.sections.flatMap((x) => x.lessons).map((l) => l.contentUrlEn),
       ).toEqual(['https://x.com/free1.mp4', 'https://x.com/paid2.mp4']);
       const [, l2] = await lessonsOf();
       expect(l2).toMatchObject({
@@ -192,7 +193,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
     });
 
     it('free courses unlock everything on enrollment', async () => {
-      const free = await courses.create(teacher, { title: 'Free one' });
+      const free = await courses.create(teacher, { titleEn: 'Free one', titleAr: 'Free one' });
       await courses.update(free.id, teacher, { status: 'published' });
       const e = await enrollments.enroll(free.id, student);
       expect(e).toMatchObject({ paid: true, paymentRequired: false });
