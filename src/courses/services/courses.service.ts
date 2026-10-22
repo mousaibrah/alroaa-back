@@ -4,6 +4,8 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { MediaService } from '../../media/services/media.service.js';
+import { contentRef } from '../../media/utils/lesson-content.util.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from './course-access.service.js';
@@ -25,7 +27,12 @@ export class CoursesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
+    private readonly media: MediaService,
   ) {}
+
+  private present(course: Parameters<typeof toCourse>[0]) {
+    return toCourse(course, (key) => this.media.publicUrl(key));
+  }
 
   async create(user: JwtPayload, dto: CreateCourseDto) {
     const base = slugify(dto.titleEn);
@@ -35,7 +42,15 @@ export class CoursesService {
           ? base
           : `${base}-${Math.random().toString(36).slice(2, 8)}`;
       try {
+        if (dto.thumbnailMediaId) {
+          await this.media.assertCover(dto.thumbnailMediaId, user);
+        }
         const course = await this.prisma.course.create({
+          include: {
+            thumbnailMedia: {
+              select: { key: true, status: true, variants: true },
+            },
+          },
           data: {
             titleEn: dto.titleEn,
             titleAr: dto.titleAr,
@@ -45,10 +60,11 @@ export class CoursesService {
             price: dto.price,
             currency: dto.currency,
             thumbnailUrl: dto.thumbnailUrl,
+            thumbnailMediaId: dto.thumbnailMediaId,
             authorId: user.sub,
           },
         });
-        return toCourse(course);
+        return this.present(course);
       } catch (error) {
         if (!isSlugConflict(error) || attempt >= 5) throw error;
       }
@@ -76,13 +92,18 @@ export class CoursesService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { author: { select: { firstName: true, lastName: true } } },
+        include: {
+          author: { select: { firstName: true, lastName: true } },
+          thumbnailMedia: {
+            select: { key: true, status: true, variants: true },
+          },
+        },
       }),
       this.prisma.course.count({ where }),
     ]);
     return {
       items: rows.map((row) => ({
-        ...toCourse(row),
+        ...this.present(row),
         authorName: `${row.author.firstName} ${row.author.lastName}`,
       })),
       total,
@@ -97,6 +118,7 @@ export class CoursesService {
     const course = await this.prisma.course.findFirst({
       where: { id, isDeleted: false },
       include: {
+        thumbnailMedia: { select: { key: true, status: true, variants: true } },
         sections: {
           where: { isDeleted: false },
           orderBy: ORDER,
@@ -136,16 +158,15 @@ export class CoursesService {
     // Enrolled learners (not the author/admin) get sequential unlocking: a
     // lesson opens once the one before it is completed.
     const lessons = course.sections.flatMap((s) => s.lessons);
-    const progressRows =
-      learner
-        ? await this.prisma.lessonProgress.findMany({
-            where: {
-              userId: learner.sub,
-              isDeleted: false,
-              lessonId: { in: lessons.map((l) => l.id) },
-            },
-          })
-        : [];
+    const progressRows = learner
+      ? await this.prisma.lessonProgress.findMany({
+          where: {
+            userId: learner.sub,
+            isDeleted: false,
+            lessonId: { in: lessons.map((l) => l.id) },
+          },
+        })
+      : [];
     const progressByLesson = new Map(progressRows.map((p) => [p.lessonId, p]));
     const unlocked = unlockedLessonIds(
       lessons,
@@ -189,7 +210,7 @@ export class CoursesService {
     const examsLocked = !manages && (!hasAccess || !paid || !allLessonsDone);
 
     return {
-      ...toCourse(course),
+      ...this.present(course),
       hasAccess,
       // Enrolled, but the paid lessons still need a payment.
       paymentRequired: hasAccess && !paid,
@@ -233,7 +254,10 @@ export class CoursesService {
           // The learner may watch it now (the player then asks for a signed,
           // short-lived URL at GET /lessons/:id/playback).
           playable:
-            (lesson.contentUrlEn !== null || lesson.contentUrlAr !== null) &&
+            (lesson.contentUrlEn !== null ||
+              lesson.contentUrlAr !== null ||
+              lesson.contentMediaEnId !== null ||
+              lesson.contentMediaArId !== null) &&
             hasAccess &&
             !isLocked(lesson.id) &&
             (paid || lesson.isPreview),
@@ -241,6 +265,15 @@ export class CoursesService {
           // course get it (the lesson form needs it). Learners never do.
           contentUrlEn: manages ? lesson.contentUrlEn : null,
           contentUrlAr: manages ? lesson.contentUrlAr : null,
+          contentMediaEnId: manages ? lesson.contentMediaEnId : null,
+          contentMediaArId: manages ? lesson.contentMediaArId : null,
+          // Resolved source per language (media wins over the URL).
+          content: manages
+            ? {
+                en: contentRef(lesson.contentMediaEnId, lesson.contentUrlEn),
+                ar: contentRef(lesson.contentMediaArId, lesson.contentUrlAr),
+              }
+            : null,
         })),
       })),
     };
@@ -248,8 +281,14 @@ export class CoursesService {
 
   async update(id: number, user: JwtPayload, dto: UpdateCourseDto) {
     await this.access.courseForManage(id, user);
+    if (dto.thumbnailMediaId) {
+      await this.media.assertCover(dto.thumbnailMediaId, user);
+    }
     const course = await this.prisma.course.update({
       where: { id },
+      include: {
+        thumbnailMedia: { select: { key: true, status: true, variants: true } },
+      },
       data: {
         titleEn: dto.titleEn,
         titleAr: dto.titleAr,
@@ -258,10 +297,11 @@ export class CoursesService {
         price: dto.price,
         currency: dto.currency,
         thumbnailUrl: dto.thumbnailUrl,
+        thumbnailMediaId: dto.thumbnailMediaId,
         status: dto.status,
       },
     });
-    return toCourse(course);
+    return this.present(course);
   }
 
   async remove(id: number, user: JwtPayload): Promise<void> {

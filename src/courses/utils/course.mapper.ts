@@ -1,7 +1,20 @@
 import type { Course } from '../../generated/prisma/client.js';
 
 // Prisma returns Decimal for price; the API exposes a plain number.
-export const toCourse = (course: Course) => ({
+type CourseRow = Course & {
+  thumbnailMedia?: {
+    key: string;
+    status: string;
+    variants: unknown;
+  } | null;
+};
+
+// The cover: an uploaded image (its 1280px WebP) wins over the legacy URL.
+// `publicUrl` turns a storage key into a URL (MediaService.publicUrl).
+export const toCourse = (
+  course: CourseRow,
+  publicUrl: (key: string) => string = () => '',
+) => ({
   id: course.id,
   titleEn: course.titleEn,
   titleAr: course.titleAr,
@@ -12,7 +25,17 @@ export const toCourse = (course: Course) => ({
   currency: course.currency,
   status: course.status,
   authorId: course.authorId,
-  thumbnailUrl: course.thumbnailUrl,
+  thumbnailUrl:
+    course.thumbnailMedia?.status === 'ready'
+      ? publicUrl(
+          (
+            course.thumbnailMedia.variants as {
+              medium?: { key: string };
+            } | null
+          )?.medium?.key ?? course.thumbnailMedia.key,
+        )
+      : course.thumbnailUrl,
+  thumbnailMediaId: course.thumbnailMediaId,
   createdAt: course.createdAt,
   updatedAt: course.updatedAt,
 });

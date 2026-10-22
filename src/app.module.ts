@@ -6,6 +6,7 @@ import { CertificatesModule } from './certificates/certificates.module.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ExamsModule } from './exams/exams.module.js';
+import { MediaModule } from './media/media.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
@@ -18,6 +19,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 		CertificatesModule,
 		EnrollmentsModule,
 		PaymentsModule,
+		MediaModule,
 	],
 	controllers: [AppController],
 	providers: [AppService],

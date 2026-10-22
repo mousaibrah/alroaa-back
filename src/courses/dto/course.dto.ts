@@ -5,6 +5,7 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  IsUUID,
   IsString,
   IsUrl,
   Matches,
@@ -54,6 +55,16 @@ export class CreateCourseDto {
   @IsOptional()
   @IsUrl()
   thumbnailUrl?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Uploaded cover image (READY, public). Takes precedence over thumbnailUrl. null clears it.',
+  })
+  @IsOptional()
+  @IsUUID()
+  thumbnailMediaId?: string | null;
 }
 
 export class UpdateCourseDto extends PartialType(CreateCourseDto) {

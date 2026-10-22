@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MediaModule } from '../media/media.module.js';
 import { CourseAccessService } from './services/course-access.service.js';
 import { CoursesController } from './controllers/courses.controller.js';
 import { CoursesService } from './services/courses.service.js';
@@ -13,6 +14,7 @@ import { SectionsController } from './controllers/sections.controller.js';
 import { SectionsService } from './services/sections.service.js';
 
 @Module({
+  imports: [MediaModule],
   controllers: [
     CoursesController,
     SectionsController,

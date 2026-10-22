@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -41,7 +42,8 @@ export class CreateLessonDto {
 
   @ApiPropertyOptional({
     example: 'https://cdn.example.com/lesson1-en.mp4',
-    description: 'English video/file. Fill only one if the lesson has a single language.',
+    description:
+      'English video/file. Fill only one if the lesson has a single language.',
   })
   @IsOptional()
   @IsUrl()
@@ -51,6 +53,21 @@ export class CreateLessonDto {
   @IsOptional()
   @IsUrl()
   contentUrlAr?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Uploaded English media (READY, matching the lesson type). Takes precedence over contentUrlEn. null clears it.',
+  })
+  @IsOptional()
+  @IsUUID()
+  contentMediaEnId?: string | null;
+
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @IsOptional()
+  @IsUUID()
+  contentMediaArId?: string | null;
 
   @ApiPropertyOptional({ example: 600, description: 'Duration in seconds' })
   @IsOptional()

@@ -11,11 +11,22 @@ import {
   lessonAccess,
 } from '../../enrollments/utils/access.util.js';
 import { ACTIVE_ENROLLMENT } from '../../enrollments/constants/enrollment.constants.js';
+import { MediaService } from '../../media/services/media.service.js';
+import { resolveLessonContent } from '../../media/utils/lesson-content.util.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from './course-access.service.js';
 import { PlaybackUrlService } from './playback-url.service.js';
 import { unlockedLessonIds } from '../utils/unlock.util.js';
 import { ORDER } from '../../common/constants/ordering.js';
+
+const MEDIA_SELECT = {
+  id: true,
+  status: true,
+  type: true,
+  key: true,
+  isPrivate: true,
+  variants: true,
+} as const;
 
 // Decides who may watch a lesson and hands out the short-lived video URL. The
 // rules are the same as on the course page: enrolled, paid (or a free preview)
@@ -26,6 +37,7 @@ export class PlaybackService {
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
     private readonly urls: PlaybackUrlService,
+    private readonly media: MediaService,
   ) {}
 
   // `lang` picks the recording language; the other one is the fallback when a
@@ -42,6 +54,8 @@ export class PlaybackService {
         lessonType: true,
         contentUrlEn: true,
         contentUrlAr: true,
+        contentMediaEn: { select: MEDIA_SELECT },
+        contentMediaAr: { select: MEDIA_SELECT },
         isPreview: true,
         section: {
           select: {
@@ -58,17 +72,18 @@ export class PlaybackService {
     if (!manages && course.status !== 'published') {
       throw new NotFoundException('Lesson not found');
     }
-    const contentUrl =
-      lang === 'ar'
-        ? (lesson.contentUrlAr ?? lesson.contentUrlEn)
-        : (lesson.contentUrlEn ?? lesson.contentUrlAr);
-    if (lesson.lessonType !== 'video' || !contentUrl) {
+    // An uploaded video wins over the legacy URL (per language, then fallback).
+    const content = resolveLessonContent(lesson, lang);
+    if (lesson.lessonType !== 'video' || !content) {
       throw new NotFoundException('This lesson has no video');
     }
 
     if (!manages)
       await this.assertLearnerMayWatch(lesson, courseId, course, user);
-    return this.urls.sign(contentUrl);
+    if (content.source === 'url') return this.urls.sign(content.url);
+    // Only reached after the access checks above. Private videos get a
+    // 1-hour presigned URL; public (preview) ones a plain public URL.
+    return this.media.playbackSource(content.media);
   }
 
   private async assertLearnerMayWatch(

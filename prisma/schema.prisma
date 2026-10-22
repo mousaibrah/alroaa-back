@@ -145,6 +145,7 @@ model User {
   lessonProgress LessonProgress[]
   examAttempts   ExamAttempt[]
   certificates   Certificate[]
+  media          Media[]
 
   @@index([roleId], map: "idx_users_role_id")
   @@map("users")
@@ -154,21 +155,23 @@ model User {
 // Courses
 // ---------------------------------------------------------------
 model Course {
-  id            Int          @id @default(autoincrement())
-  titleEn       String       @map("title_en") @db.VarChar(255)
-  titleAr       String       @map("title_ar") @db.VarChar(255)
-  slug          String       @unique @db.VarChar(255)
-  descriptionEn String?      @map("description_en")
-  descriptionAr String?      @map("description_ar")
-  price         Decimal      @default(0) @db.Decimal(10, 2)
-  currency      String       @default("USD") @db.Char(3)
-  status        CourseStatus @default(draft)
-  authorId      Int          @map("author_id")
-  thumbnailUrl  String?      @map("thumbnail_url")
-  isDeleted     Boolean      @default(false) @map("is_deleted")
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
-  author        User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  id               Int          @id @default(autoincrement())
+  titleEn          String       @map("title_en") @db.VarChar(255)
+  titleAr          String       @map("title_ar") @db.VarChar(255)
+  slug             String       @unique @db.VarChar(255)
+  descriptionEn    String?      @map("description_en")
+  descriptionAr    String?      @map("description_ar")
+  price            Decimal      @default(0) @db.Decimal(10, 2)
+  currency         String       @default("USD") @db.Char(3)
+  status           CourseStatus @default(draft)
+  authorId         Int          @map("author_id")
+  thumbnailUrl     String?      @map("thumbnail_url")
+  thumbnailMediaId String?      @map("thumbnail_media_id") @db.Uuid
+  isDeleted        Boolean      @default(false) @map("is_deleted")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  author           User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  thumbnailMedia   Media?       @relation("CourseThumbnail", fields: [thumbnailMediaId], references: [id], onDelete: SetNull)
 
   sections     CourseSection[]
   exams        Exam[]
@@ -177,6 +180,7 @@ model Course {
   certificates Certificate[]
 
   @@index([authorId], map: "idx_courses_author_id")
+  @@index([thumbnailMediaId], map: "idx_courses_thumbnail_media_id")
   @@map("courses")
 }
 
@@ -200,26 +204,32 @@ model CourseSection {
 }
 
 model Lesson {
-  id            Int           @id @default(autoincrement())
-  sectionId     Int           @map("section_id")
-  titleEn       String        @map("title_en") @db.VarChar(255)
-  titleAr       String        @map("title_ar") @db.VarChar(255)
-  descriptionEn String?       @map("description_en")
-  descriptionAr String?       @map("description_ar")
-  lessonType    LessonType    @map("lesson_type")
-  contentUrlEn  String?       @map("content_url_en")
-  contentUrlAr  String?       @map("content_url_ar")
-  durationSec   Int?          @map("duration_sec")
-  sortOrder     Int           @default(0) @map("sort_order")
-  isPreview     Boolean       @default(false) @map("is_preview")
-  isDeleted     Boolean       @default(false) @map("is_deleted")
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  section       CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id               Int           @id @default(autoincrement())
+  sectionId        Int           @map("section_id")
+  titleEn          String        @map("title_en") @db.VarChar(255)
+  titleAr          String        @map("title_ar") @db.VarChar(255)
+  descriptionEn    String?       @map("description_en")
+  descriptionAr    String?       @map("description_ar")
+  lessonType       LessonType    @map("lesson_type")
+  contentUrlEn     String?       @map("content_url_en")
+  contentUrlAr     String?       @map("content_url_ar")
+  contentMediaEnId String?       @map("content_media_en_id") @db.Uuid
+  contentMediaArId String?       @map("content_media_ar_id") @db.Uuid
+  durationSec      Int?          @map("duration_sec")
+  sortOrder        Int           @default(0) @map("sort_order")
+  isPreview        Boolean       @default(false) @map("is_preview")
+  isDeleted        Boolean       @default(false) @map("is_deleted")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  section          CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  contentMediaEn   Media?        @relation("LessonMediaEn", fields: [contentMediaEnId], references: [id], onDelete: SetNull)
+  contentMediaAr   Media?        @relation("LessonMediaAr", fields: [contentMediaArId], references: [id], onDelete: SetNull)
 
   progress LessonProgress[]
 
   @@index([sectionId], map: "idx_lessons_section_id")
+  @@index([contentMediaEnId], map: "idx_lessons_content_media_en_id")
+  @@index([contentMediaArId], map: "idx_lessons_content_media_ar_id")
   @@map("lessons")
 }
 
@@ -423,4 +433,54 @@ model Certificate {
 
   @@index([userId], map: "idx_certificates_user_id")
   @@map("certificates")
+}
+
+// ---------------------------------------------------------------
+// Media uploads (files live in S3-compatible storage; pg-boss keeps its own
+// `pgboss` schema which is deliberately not modelled here)
+// ---------------------------------------------------------------
+enum MediaType {
+  image
+  video
+
+  @@map("media_type")
+}
+
+enum MediaStatus {
+  pending
+  uploaded
+  processing
+  ready
+  failed
+
+  @@map("media_status")
+}
+
+model Media {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId       Int?        @map("owner_id")
+  key           String      @unique
+  type          MediaType
+  mimeType      String      @map("mime_type") @db.VarChar(100)
+  size          BigInt
+  originalName  String      @map("original_name") @db.VarChar(255)
+  status        MediaStatus @default(pending)
+  width         Int?
+  height        Int?
+  durationSec   Int?        @map("duration_sec")
+  thumbnailKey  String?     @map("thumbnail_key")
+  variants      Json?
+  isPrivate     Boolean     @default(false) @map("is_private")
+  failureReason String?     @map("failure_reason")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  owner         User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  lessonsEn Lesson[] @relation("LessonMediaEn")
+  lessonsAr Lesson[] @relation("LessonMediaAr")
+  courses   Course[] @relation("CourseThumbnail")
+
+  @@index([ownerId], map: "idx_media_owner_id")
+  @@index([status], map: "idx_media_status")
+  @@map("media")
 }

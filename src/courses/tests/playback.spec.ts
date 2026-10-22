@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import type { PrismaService } from '../../prisma/prisma.service.js';
+import type { MediaService } from '../../media/services/media.service.js';
 import { CourseAccessService } from '../services/course-access.service.js';
 import { PlaybackService } from '../services/playback.service.js';
 import { PlaybackUrlService } from '../services/playback-url.service.js';
@@ -115,12 +116,40 @@ describe('PlaybackService.resolve', () => {
       db,
       new CourseAccessService(db),
       new PlaybackUrlService(),
+      {
+        playbackSource: vi.fn().mockResolvedValue({
+          url: 'https://s3/signed',
+          kind: 'file',
+          expiresAt: null,
+        }),
+      } as unknown as MediaService,
     );
   };
 
   it('hands the video to an enrolled learner whose previous lesson is done', async () => {
     const out = await make({ completed: [1] }).resolve(2, student);
     expect(out).toMatchObject({ url: 'https://cdn.x/2.mp4', kind: 'file' });
+  });
+
+  it('serves uploaded media in preference to the legacy URL, after the access checks', async () => {
+    const lesson = {
+      id: 2,
+      lessonType: 'video',
+      contentUrlEn: 'https://cdn.x/2.mp4',
+      contentMediaEn: { id: 'm1', status: 'ready' },
+      isPreview: false,
+      section: {
+        courseId: 1,
+        course: { authorId: 1, status: 'published', price: 0 },
+      },
+    };
+    const svc = make({ lesson, completed: [1] });
+    expect(await svc.resolve(2, student)).toMatchObject({
+      url: 'https://s3/signed',
+    });
+    await expect(
+      make({ lesson, enrollment: null }).resolve(2, student),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('refuses a learner who is not enrolled', async () => {
