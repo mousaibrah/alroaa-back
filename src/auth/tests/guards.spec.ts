@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import type { PrismaService } from '../../prisma/prisma.service.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator.js';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard.js';
@@ -25,6 +26,17 @@ const reflectorFor = (metadata: Record<string, unknown>) =>
     getAllAndOverride: (key: string) => metadata[key],
   }) as unknown as Reflector;
 
+// The account behind a token, as the guard reads it.
+const accounts = (
+  account: { isDeleted: boolean; passwordChangedAt: Date | null } | null = {
+    isDeleted: false,
+    passwordChangedAt: null,
+  },
+) =>
+  ({
+    user: { findUnique: vi.fn().mockResolvedValue(account) },
+  }) as unknown as PrismaService;
+
 describe('JwtAuthGuard', () => {
   const jwt = new JwtService({ secret: 'test-secret' });
 
@@ -32,6 +44,7 @@ describe('JwtAuthGuard', () => {
     const guard = new JwtAuthGuard(
       jwt,
       reflectorFor({ [IS_PUBLIC_KEY]: true }),
+      accounts(),
     );
     await expect(guard.canActivate(makeContext({ headers: {} }))).resolves.toBe(
       true,
@@ -39,7 +52,7 @@ describe('JwtAuthGuard', () => {
   });
 
   it('rejects a missing token', async () => {
-    const guard = new JwtAuthGuard(jwt, reflectorFor({}));
+    const guard = new JwtAuthGuard(jwt, reflectorFor({}), accounts());
     await expect(
       guard.canActivate(makeContext({ headers: {} })),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -49,7 +62,7 @@ describe('JwtAuthGuard', () => {
     const forged = await new JwtService({ secret: 'other' }).signAsync({
       sub: 1,
     });
-    const guard = new JwtAuthGuard(jwt, reflectorFor({}));
+    const guard = new JwtAuthGuard(jwt, reflectorFor({}), accounts());
     await expect(
       guard.canActivate(
         makeContext({ headers: { authorization: `Bearer ${forged}` } }),
@@ -65,9 +78,60 @@ describe('JwtAuthGuard', () => {
     const request: { headers: object; user?: { sub: number } } = {
       headers: { authorization: `Bearer ${token}` },
     };
-    const guard = new JwtAuthGuard(jwt, reflectorFor({}));
+    const guard = new JwtAuthGuard(jwt, reflectorFor({}), accounts());
     await expect(guard.canActivate(makeContext(request))).resolves.toBe(true);
     expect(request.user?.sub).toBe(1);
+  });
+
+  const bearer = (token: string) => ({
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  it('refuses a token issued before the last password change', async () => {
+    const token = await jwt.signAsync({ sub: 1 });
+    const guard = new JwtAuthGuard(
+      jwt,
+      reflectorFor({}),
+      accounts({
+        isDeleted: false,
+        passwordChangedAt: new Date(Date.now() + 5_000),
+      }),
+    );
+    await expect(guard.canActivate(makeContext(bearer(token)))).rejects.toThrow(
+      'Session has ended',
+    );
+  });
+
+  it('accepts a token issued in the same second as the change', async () => {
+    const token = await jwt.signAsync({ sub: 1 });
+    const guard = new JwtAuthGuard(
+      jwt,
+      reflectorFor({}),
+      accounts({ isDeleted: false, passwordChangedAt: new Date() }),
+    );
+    await expect(guard.canActivate(makeContext(bearer(token)))).resolves.toBe(
+      true,
+    );
+  });
+
+  it('refuses a token of a deleted account, but lets it browse public routes as a guest', async () => {
+    const token = await jwt.signAsync({ sub: 1 });
+    const deleted = accounts({ isDeleted: true, passwordChangedAt: null });
+    await expect(
+      new JwtAuthGuard(jwt, reflectorFor({}), deleted).canActivate(
+        makeContext(bearer(token)),
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    const request: { headers: object; user?: unknown } = bearer(token);
+    await expect(
+      new JwtAuthGuard(
+        jwt,
+        reflectorFor({ [IS_PUBLIC_KEY]: true }),
+        deleted,
+      ).canActivate(makeContext(request)),
+    ).resolves.toBe(true);
+    expect(request.user).toBeUndefined();
   });
 });
 

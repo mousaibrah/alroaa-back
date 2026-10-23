@@ -1,78 +1,76 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc.js';
 import { UserDto } from '../../users/dto/user.dto.js';
-import { RegisterRole } from '../../users/types/user-role.enum.js';
+import { UserRole } from '../../users/types/user-role.enum.js';
 import type { User } from '../../users/types/user.entity.js';
 import { UsersService } from '../../users/services/users.service.js';
+import { assertDobNotInFuture } from '../../users/utils/dob.util.js';
+import {
+  MediaService,
+  type TempFile,
+} from '../../media/services/media.service.js';
 import type { AuthResponseDto } from '../dto/auth-response.dto.js';
+import type {
+  ChangeEmailDto,
+  ChangePasswordDto,
+} from '../dto/change-credentials.dto.js';
 import type { LoginDto } from '../dto/login.dto.js';
 import type { RegisterDto } from '../dto/register.dto.js';
 import type { JwtPayload } from '../types/jwt-payload.js';
 
-dayjs.extend(utc);
-
 const SALT_ROUNDS = 10;
-// Latest timezone offset on Earth (UTC+14): a user's local "today" can be
-// up to 14h ahead of UTC, so that is the tolerance for the future-dob check.
-const MAX_UTC_OFFSET_HOURS = 14;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly media: MediaService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    // dob is a calendar date (no time, no timezone): compared and stored as
-    // YYYY-MM-DD and never converted through a timezone.
-    if (
-      dto.dob &&
-      dto.dob >
-        dayjs.utc().add(MAX_UTC_OFFSET_HOURS, 'hour').format('YYYY-MM-DD')
-    ) {
-      throw new BadRequestException('dob cannot be in the future');
-    }
+  // `image` is the optional profile picture: stored before the account exists
+  // (no owner yet), then handed to the new user.
+  async register(dto: RegisterDto, image?: TempFile): Promise<AuthResponseDto> {
+    assertDobNotInFuture(dto.dob);
 
     const email = dto.email.toLowerCase();
     if (await this.usersService.findByEmail(email)) {
       throw new ConflictException('Email is already registered');
     }
 
-    // Resolve the role by name so no role id is hardcoded. Only RegisterRole
-    // values get past validation, so `admin` can never be requested here.
-    const roleId = await this.usersService.findRoleIdByName(
-      dto.role ?? RegisterRole.STUDENT,
-    );
+    // Every new account is a `user`; admins are only created in the database.
+    // Resolved by name so no role id is hardcoded.
+    const roleId = await this.usersService.findRoleIdByName(UserRole.USER);
     if (roleId === undefined) {
       throw new InternalServerErrorException(
         'Roles are not set up: run database/seed.sql',
       );
     }
 
+    const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
     let user: User;
     try {
-      user = await this.usersService.create({
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        firstNameAr: dto.firstNameAr ?? null,
-        lastNameAr: dto.lastNameAr ?? null,
-        email,
-        password: await bcrypt.hash(dto.password, SALT_ROUNDS),
-        image: dto.image ?? null,
-        gender: dto.gender ?? null,
-        dob: dto.dob ?? null,
-        roleId,
-      });
+      user = await this.media.withUpload(image, 'image', null, (stored) =>
+        this.usersService.create({
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email,
+          password,
+          image: stored?.url ?? null,
+          imageMediaId: stored?.mediaId ?? null,
+          gender: dto.gender ?? null,
+          dob: dto.dob ?? null,
+          roleId,
+        }),
+      );
     } catch (error) {
       // Prisma P2002 = unique constraint violation: another request registered the same email first
       if ((error as { code?: string }).code === 'P2002') {
@@ -81,6 +79,9 @@ export class AuthService {
       throw error;
     }
 
+    if (user.imageMediaId) {
+      await this.media.setOwner(user.imageMediaId, user.id);
+    }
     return this.buildResponse(user);
   }
 
@@ -92,6 +93,59 @@ export class AuthService {
     }
 
     return this.buildResponse(user);
+  }
+
+  // Both credential changes ask for the current password, sign out every other
+  // session, and hand back a fresh token for this one.
+  async changePassword(
+    caller: JwtPayload,
+    dto: ChangePasswordDto,
+  ): Promise<AuthResponseDto> {
+    const user = await this.verifyPassword(caller.sub, dto.currentPassword);
+    if (await bcrypt.compare(dto.newPassword, user.password)) {
+      throw new BadRequestException(
+        'The new password must differ from the current one',
+      );
+    }
+    const updated = await this.usersService.updateCredentials(user.id, {
+      password: await bcrypt.hash(dto.newPassword, SALT_ROUNDS),
+    });
+    return this.buildResponse(updated);
+  }
+
+  async changeEmail(
+    caller: JwtPayload,
+    dto: ChangeEmailDto,
+  ): Promise<AuthResponseDto> {
+    const user = await this.verifyPassword(caller.sub, dto.currentPassword);
+    const email = dto.email.toLowerCase();
+    if (email === user.email) {
+      throw new BadRequestException('This is already your email');
+    }
+    if (await this.usersService.findByEmail(email)) {
+      throw new ConflictException('Email is already registered');
+    }
+    try {
+      return this.buildResponse(
+        await this.usersService.updateCredentials(user.id, { email }),
+      );
+    } catch (error) {
+      // P2002: another account took the address in the meantime.
+      if ((error as { code?: string }).code === 'P2002') {
+        throw new ConflictException('Email is already registered');
+      }
+      throw error;
+    }
+  }
+
+  // 403, not 401: the session is valid, only the password is wrong (a 401
+  // would log the frontend out).
+  private async verifyPassword(userId: number, password: string) {
+    const user = await this.usersService.findById(userId);
+    if (!(await bcrypt.compare(password, user.password))) {
+      throw new ForbiddenException('Current password is incorrect');
+    }
+    return user;
   }
 
   private async buildResponse(user: User): Promise<AuthResponseDto> {

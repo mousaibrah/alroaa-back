@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import {
   ForbiddenException,
   Injectable,
@@ -25,6 +26,19 @@ import { ORDER } from '../../common/constants/ordering.js';
 import { toCourse, examResults } from '../utils/course.mapper.js';
 import { slugify, isSlugConflict } from '../utils/slug.util.js';
 
+// Files sent with the course form (multer puts each field in an array).
+export interface CourseUploads {
+  thumbnail?: TempFile[];
+  introVideo?: TempFile[];
+}
+
+type CourseFileFields = {
+  thumbnailUrl?: string;
+  thumbnailMediaId?: string;
+  introVideoUrl?: string;
+  introVideoMediaId?: string;
+};
+
 @Injectable()
 export class CoursesService {
   constructor(
@@ -37,10 +51,41 @@ export class CoursesService {
     return toCourse(course, (key) => this.media.publicUrl(key));
   }
 
-  // The cover image, when sent, is stored once; thumbnailUrl points at it right
-  // away and switches to the resized WebP once it is processed.
-  create(user: JwtPayload, dto: CreateCourseDto, thumbnail?: TempFile) {
-    return this.media.withUpload(thumbnail, 'image', user, async (stored) => {
+  // Stores the cover image and intro video that were sent, then runs `save`
+  // with their fields. Their URLs are set right away and switch to the
+  // processed copies (resized WebP, web MP4) in the background.
+  private async withFiles<T>(
+    files: CourseUploads,
+    user: JwtPayload,
+    save: (data: CourseFileFields) => Promise<T>,
+  ): Promise<T> {
+    const thumbnail = files.thumbnail?.[0];
+    const introVideo = files.introVideo?.[0];
+    try {
+      return await this.media.withUpload(thumbnail, 'image', user, (cover) =>
+        this.media.withUpload(introVideo, 'video', user, (intro) =>
+          save({
+            ...(cover
+              ? { thumbnailUrl: cover.url, thumbnailMediaId: cover.mediaId }
+              : {}),
+            ...(intro
+              ? { introVideoUrl: intro.url, introVideoMediaId: intro.mediaId }
+              : {}),
+          }),
+        ),
+      );
+    } finally {
+      // A rejected first file leaves the second one's temp file behind.
+      await Promise.all(
+        [thumbnail, introVideo].map(
+          (file) => file && rm(file.path, { force: true }),
+        ),
+      );
+    }
+  }
+
+  create(user: JwtPayload, dto: CreateCourseDto, files: CourseUploads = {}) {
+    return this.withFiles(files, user, async (fileFields) => {
       const base = slugify(dto.titleEn);
       for (let attempt = 0; ; attempt++) {
         const slug =
@@ -62,8 +107,7 @@ export class CoursesService {
               descriptionAr: dto.descriptionAr,
               price: dto.price,
               currency: dto.currency,
-              thumbnailUrl: stored?.url,
-              thumbnailMediaId: stored?.mediaId,
+              ...fileFields,
               authorId: user.sub,
             },
           });
@@ -277,44 +321,42 @@ export class CoursesService {
     };
   }
 
-  // A new cover replaces the old one, whose files are deleted.
+  // A new cover or intro video replaces the old one, whose files are deleted.
   async update(
     id: number,
     user: JwtPayload,
     dto: UpdateCourseDto,
-    thumbnail?: TempFile,
+    files: CourseUploads = {},
   ) {
     const current = await this.access.courseForManage(id, user);
-    const course = await this.media.withUpload(
-      thumbnail,
-      'image',
-      user,
-      (stored) =>
-        this.prisma.course.update({
-          where: { id },
-          include: {
-            thumbnailMedia: {
-              select: { key: true, status: true, variants: true },
-            },
+    const course = await this.withFiles(files, user, (fileFields) =>
+      this.prisma.course.update({
+        where: { id },
+        include: {
+          thumbnailMedia: {
+            select: { key: true, status: true, variants: true },
           },
-          data: {
-            titleEn: dto.titleEn,
-            titleAr: dto.titleAr,
-            descriptionEn: dto.descriptionEn,
-            descriptionAr: dto.descriptionAr,
-            price: dto.price,
-            currency: dto.currency,
-            status: dto.status,
-            ...(stored
-              ? { thumbnailUrl: stored.url, thumbnailMediaId: stored.mediaId }
-              : {}),
-          },
-        }),
+        },
+        data: {
+          titleEn: dto.titleEn,
+          titleAr: dto.titleAr,
+          descriptionEn: dto.descriptionEn,
+          descriptionAr: dto.descriptionAr,
+          price: dto.price,
+          currency: dto.currency,
+          status: dto.status,
+          ...fileFields,
+        },
+      }),
     );
-    if (thumbnail && current.thumbnailMediaId) {
-      await this.media
-        .removeIfUnused(current.thumbnailMediaId)
-        .catch(() => undefined);
+    const replaced = [
+      files.thumbnail?.length ? current.thumbnailMediaId : null,
+      files.introVideo?.length ? current.introVideoMediaId : null,
+    ];
+    for (const mediaId of replaced) {
+      if (mediaId) {
+        await this.media.removeIfUnused(mediaId).catch(() => undefined);
+      }
     }
     return this.present(course);
   }

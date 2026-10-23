@@ -36,6 +36,9 @@ export const toCourse = (
         )
       : course.thumbnailUrl,
   thumbnailMediaId: course.thumbnailMediaId,
+  // Public intro video for the overview page (the web MP4 once processed).
+  introVideoUrl: course.introVideoUrl,
+  introVideoMediaId: course.introVideoMediaId,
   createdAt: course.createdAt,
   updatedAt: course.updatedAt,
 });

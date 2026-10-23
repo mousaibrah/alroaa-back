@@ -11,7 +11,7 @@ import {
   Post,
   Put,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import {
@@ -26,7 +26,10 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { Permission } from '../../auth/constants/permissions.js';
-import { CoursesService } from '../services/courses.service.js';
+import {
+  CoursesService,
+  type CourseUploads,
+} from '../services/courses.service.js';
 import {
   CreateCourseDto,
   CreateCourseFormDto,
@@ -34,8 +37,7 @@ import {
   UpdateCourseDto,
   UpdateCourseFormDto,
 } from '../dto/course.dto.js';
-import type { TempFile } from '../../media/services/media.service.js';
-import { UploadInterceptor } from '../../media/utils/upload.interceptor.js';
+import { UploadFieldsInterceptor } from '../../media/utils/upload.interceptor.js';
 import { ReorderDto } from '../dto/reorder.dto.js';
 import { CreateSectionDto } from '../dto/section.dto.js';
 import { SectionsService } from '../services/sections.service.js';
@@ -54,17 +56,17 @@ export class CoursesController {
   @ApiOperation({
     summary: 'Create a course (starts as a draft)',
     description:
-      'Send multipart/form-data with the cover image in `thumbnail` (optional).',
+      'Send multipart/form-data with the cover image in `thumbnail` and the intro video in `introVideo` (both optional).',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: CreateCourseFormDto })
-  @UseInterceptors(UploadInterceptor('thumbnail', 'image'))
+  @UseInterceptors(UploadFieldsInterceptor('thumbnail', 'introVideo'))
   create(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateCourseDto,
-    @UploadedFile() thumbnail?: TempFile,
+    @UploadedFiles() files?: CourseUploads,
   ) {
-    return this.courses.create(user, dto, thumbnail);
+    return this.courses.create(user, dto, files);
   }
 
   @Get()
@@ -97,18 +99,18 @@ export class CoursesController {
   @ApiOperation({
     summary: 'Update a course (author or admin)',
     description:
-      'Send multipart/form-data with a new cover image in `thumbnail` to replace it.',
+      'Send multipart/form-data with a new cover in `thumbnail` and/or intro video in `introVideo` to replace them.',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateCourseFormDto })
-  @UseInterceptors(UploadInterceptor('thumbnail', 'image'))
+  @UseInterceptors(UploadFieldsInterceptor('thumbnail', 'introVideo'))
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCourseDto,
-    @UploadedFile() thumbnail?: TempFile,
+    @UploadedFiles() files?: CourseUploads,
   ) {
-    return this.courses.update(id, user, dto, thumbnail);
+    return this.courses.update(id, user, dto, files);
   }
 
   @Delete(':id')

@@ -5,7 +5,7 @@ export class AuthResponseDto {
   @ApiProperty({ type: UserDto })
   user: UserDto;
 
-  @ApiProperty({ example: 'student' })
+  @ApiProperty({ example: 'user' })
   role: string;
 
   @ApiProperty({

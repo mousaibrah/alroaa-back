@@ -12,12 +12,6 @@ export class UserDto {
   @ApiProperty({ example: 'Doe' })
   lastName: string;
 
-  @ApiPropertyOptional({ example: 'جون', nullable: true })
-  firstNameAr: string | null;
-
-  @ApiPropertyOptional({ example: 'دو', nullable: true })
-  lastNameAr: string | null;
-
   @ApiProperty({ example: 'john.doe@example.com' })
   email: string;
 
@@ -48,8 +42,6 @@ export class UserDto {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
-      firstNameAr: user.firstNameAr,
-      lastNameAr: user.lastNameAr,
       email: user.email,
       image: user.image,
       gender: user.gender,

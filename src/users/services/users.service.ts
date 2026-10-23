@@ -1,7 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { JwtPayload } from '../../auth/types/jwt-payload.js';
+import {
+  MediaService,
+  type TempFile,
+} from '../../media/services/media.service.js';
 import type { User as PrismaUser } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { CreateUserDto } from '../dto/create-user.dto.js';
+import type { UpdateProfileDto } from '../dto/update-profile.dto.js';
+import { assertDobNotInFuture } from '../utils/dob.util.js';
 import type { Gender, User } from '../types/user.entity.js';
 
 // `dob` is a Postgres DATE, which Prisma reads/writes as a Date at UTC
@@ -14,7 +21,10 @@ const toUser = (row: PrismaUser): User => ({
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaService,
+  ) {}
 
   async findByEmail(email: string): Promise<User | undefined> {
     const row = await this.prisma.user.findFirst({
@@ -57,15 +67,77 @@ export class UsersService {
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
-        firstNameAr: data.firstNameAr,
-        lastNameAr: data.lastNameAr,
         email: data.email,
         password: data.password,
         image: data.image,
+        imageMediaId: data.imageMediaId,
         gender: data.gender,
         dob: data.dob ? new Date(data.dob) : null,
         roleId: data.roleId,
       },
+    });
+    return toUser(row);
+  }
+
+  // Uploads a new profile picture: `image` points at it right away and switches
+  // to the 320px WebP once processed. The previous picture is deleted.
+  async updateImage(user: JwtPayload, file: TempFile): Promise<User> {
+    const current = await this.prisma.user.findFirst({
+      where: { id: user.sub, isDeleted: false },
+      select: { imageMediaId: true },
+    });
+    if (!current) throw new NotFoundException('User not found');
+    const row = await this.media.withUpload(file, 'image', user, (stored) =>
+      this.prisma.user.update({
+        where: { id: user.sub },
+        data: { image: stored?.url, imageMediaId: stored?.mediaId },
+      }),
+    );
+    if (current.imageMediaId) {
+      await this.media
+        .removeIfUnused(current.imageMediaId)
+        .catch(() => undefined);
+    }
+    return toUser(row);
+  }
+
+  async findById(id: number): Promise<User> {
+    const row = await this.prisma.user.findFirst({
+      where: { id, isDeleted: false },
+    });
+    if (!row) throw new NotFoundException('User not found');
+    return toUser(row);
+  }
+
+  // Name, gender and date of birth; `null` clears gender or dob.
+  async updateProfile(id: number, dto: UpdateProfileDto): Promise<User> {
+    await this.findById(id);
+    assertDobNotInFuture(dto.dob);
+    const row = await this.prisma.user.update({
+      where: { id },
+      data: {
+        firstName: dto.firstName?.trim(),
+        lastName: dto.lastName?.trim(),
+        gender: dto.gender,
+        dob:
+          dto.dob === undefined
+            ? undefined
+            : dto.dob
+              ? new Date(dto.dob)
+              : null,
+      },
+    });
+    return toUser(row);
+  }
+
+  // Credential changes also end every other session (see JwtAuthGuard).
+  async updateCredentials(
+    id: number,
+    data: { email?: string; password?: string },
+  ): Promise<User> {
+    const row = await this.prisma.user.update({
+      where: { id },
+      data: { ...data, passwordChangedAt: new Date() },
     });
     return toUser(row);
   }

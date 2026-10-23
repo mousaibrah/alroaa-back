@@ -138,13 +138,15 @@ describe('SectionsService', () => {
   });
 });
 
-describe('CoursesService cover upload', () => {
-  const cover = {
-    path: '/tmp/x',
-    originalname: 'c.png',
-    mimetype: 'image/png',
+describe('CoursesService cover and intro video upload', () => {
+  const file = (name: string, mimetype: string) => ({
+    path: `/tmp/course-spec-${name}`,
+    originalname: name,
+    mimetype,
     size: 1,
-  };
+  });
+  const cover = file('c.png', 'image/png');
+  const intro = file('i.mp4', 'video/mp4');
   const row = (data: object) => ({
     id: 1,
     price: 0,
@@ -160,17 +162,26 @@ describe('CoursesService cover upload', () => {
       },
     };
     const media = {
-      // Stands in for MediaService.withUpload: the file is "stored" as m2.
-      withUpload: vi.fn((file, _type, _user, save) =>
-        save(file ? { mediaId: 'm2', url: 'http://s3/c.png' } : undefined),
+      // Stands in for MediaService.withUpload: images are "stored" as img2,
+      // videos as vid2.
+      withUpload: vi.fn((f, type, _user, save) =>
+        save(
+          f
+            ? type === 'image'
+              ? { mediaId: 'img2', url: 'http://s3/c.png' }
+              : { mediaId: 'vid2', url: 'http://s3/i.mp4' }
+            : undefined,
+        ),
       ),
       removeIfUnused: vi.fn().mockResolvedValue(undefined),
       publicUrl: (key: string) => key,
     };
     const access = {
-      courseForManage: vi
-        .fn()
-        .mockResolvedValue({ id: 1, thumbnailMediaId: 'm1' }),
+      courseForManage: vi.fn().mockResolvedValue({
+        id: 1,
+        thumbnailMediaId: 'img1',
+        introVideoMediaId: 'vid1',
+      }),
     };
     const service = new CoursesService(
       prisma as unknown as PrismaService,
@@ -180,36 +191,41 @@ describe('CoursesService cover upload', () => {
     return { service, prisma, media };
   };
 
-  it('saves the uploaded cover URL and media on create', async () => {
-    const { service, prisma, media } = make();
+  it('saves the uploaded cover and intro video on create', async () => {
+    const { service, prisma } = make();
     const out = await service.create(
       user(5),
       { titleEn: 'A', titleAr: 'A' },
-      cover,
+      { thumbnail: [cover], introVideo: [intro] },
     );
-    expect(media.withUpload.mock.calls[0][1]).toBe('image');
     expect(prisma.course.create.mock.calls[0][0].data).toMatchObject({
       thumbnailUrl: 'http://s3/c.png',
-      thumbnailMediaId: 'm2',
+      thumbnailMediaId: 'img2',
+      introVideoUrl: 'http://s3/i.mp4',
+      introVideoMediaId: 'vid2',
     });
-    expect(out.thumbnailUrl).toBe('http://s3/c.png');
+    expect(out).toMatchObject({
+      thumbnailUrl: 'http://s3/c.png',
+      introVideoUrl: 'http://s3/i.mp4',
+    });
   });
 
-  it('replaces the cover on update and deletes the old one', async () => {
+  it('replaces only the intro video on update and deletes the old one', async () => {
     const { service, prisma, media } = make();
-    await service.update(1, user(5), {}, cover);
-    expect(prisma.course.update.mock.calls[0][0].data).toMatchObject({
-      thumbnailMediaId: 'm2',
-    });
-    expect(media.removeIfUnused).toHaveBeenCalledWith('m1');
+    await service.update(1, user(5), {}, { introVideo: [intro] });
+    const data = prisma.course.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({ introVideoMediaId: 'vid2' });
+    expect(data).not.toHaveProperty('thumbnailMediaId');
+    expect(media.removeIfUnused).toHaveBeenCalledTimes(1);
+    expect(media.removeIfUnused).toHaveBeenCalledWith('vid1');
   });
 
-  it('keeps the cover when no file is sent', async () => {
+  it('keeps both files when none is sent', async () => {
     const { service, prisma, media } = make();
     await service.update(1, user(5), { titleEn: 'B' });
-    expect(prisma.course.update.mock.calls[0][0].data).not.toHaveProperty(
-      'thumbnailMediaId',
-    );
+    const data = prisma.course.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('thumbnailMediaId');
+    expect(data).not.toHaveProperty('introVideoMediaId');
     expect(media.removeIfUnused).not.toHaveBeenCalled();
   });
 });

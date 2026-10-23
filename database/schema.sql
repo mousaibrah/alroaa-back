@@ -52,14 +52,11 @@ CREATE TABLE role_permissions (
 -- ---------------------------------------------------------------
 -- Users
 -- first_name / last_name = the name as entered at sign-up (any language)
--- *_ar = optional Arabic spelling (used on certificates, Arabic UI)
 -- ---------------------------------------------------------------
 CREATE TABLE users (
     id            SERIAL PRIMARY KEY,
     first_name    VARCHAR(100) NOT NULL,
     last_name     VARCHAR(100) NOT NULL,
-    first_name_ar VARCHAR(100),
-    last_name_ar  VARCHAR(100),
     email         VARCHAR(255) NOT NULL UNIQUE,
     password      VARCHAR(255) NOT NULL, -- store a hash (bcrypt/argon2), never plain text
     image         TEXT,                  -- image URL or path
@@ -375,3 +372,31 @@ ALTER TABLE courses
     ADD COLUMN thumbnail_media_id UUID REFERENCES media(id) ON DELETE SET NULL;
 
 CREATE INDEX idx_courses_thumbnail_media_id ON courses(thumbnail_media_id);
+
+-- The course introduction video, shown on the course overview page. The URL is
+-- the uploaded file's (the web MP4 once processed).
+ALTER TABLE courses
+    ADD COLUMN intro_video_url TEXT,
+    ADD COLUMN intro_video_media_id UUID REFERENCES media(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_courses_intro_video_media_id ON courses(intro_video_media_id);
+
+-- ---------------------------------------------------------------
+-- 2026-10-24: users no longer have an Arabic spelling of their name.
+-- For databases created before this change (no-op on a fresh one).
+-- ---------------------------------------------------------------
+ALTER TABLE users
+    DROP COLUMN IF EXISTS first_name_ar,
+    DROP COLUMN IF EXISTS last_name_ar;
+
+-- The uploaded profile picture. users.image keeps its URL (the 320px WebP once
+-- processed); image_media_id is the media item behind it.
+ALTER TABLE users
+    ADD COLUMN image_media_id UUID REFERENCES media(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_users_image_media_id ON users(image_media_id);
+
+-- Signs out other sessions after a password or email change: access tokens
+-- issued before password_changed_at are refused.
+ALTER TABLE users
+    ADD COLUMN password_changed_at TIMESTAMPTZ;

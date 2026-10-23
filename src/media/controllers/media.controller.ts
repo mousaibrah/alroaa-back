@@ -18,7 +18,7 @@ import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { ListMediaQueryDto, PresignMediaDto } from '../dto/media.dto.js';
 import { MediaService } from '../services/media.service.js';
 
-// Admins and instructors only: they are the roles that hold courses.update.
+// Admins only: the only role that holds courses.update.
 @ApiTags('Media')
 @ApiBearerAuth()
 @RequirePermissions(Permission.COURSES_UPDATE)

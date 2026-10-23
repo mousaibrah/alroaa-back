@@ -1,6 +1,7 @@
 -- Starter data: roles, permissions and their mapping.
 -- Run after schema.sql. Safe to re-run (idempotent).
--- Role ids matter: DEFAULT_ROLE_ID = 2 (student) in src/auth/auth.service.ts.
+-- Two roles: admin (only created here, never through the API) and user (what
+-- POST /auth/register gives everyone; looked up by name).
 
 INSERT INTO roles (id, name, description) VALUES
     (1, 'admin',      'Full access to the platform'),

@@ -47,12 +47,13 @@ export class MediaService {
     private readonly queue: MediaQueueService,
   ) {}
 
-  // A file sent with a form (lesson content, course cover): stored in the
-  // public part of the bucket as an UPLOADED media item. Use `withUpload`.
+  // A file sent with a form (lesson content, course cover and intro, profile
+  // picture): stored in the public part of the bucket as an UPLOADED media
+  // item. Use `withUpload`. `user` is null for a sign-up (see `setOwner`).
   private async storeFile(
     file: TempFile,
     expected: MediaType,
-    user: JwtPayload,
+    user: JwtPayload | null,
   ): Promise<Media> {
     const { type, ext } = validateUpload(file.mimetype, file.size);
     if (type !== expected) {
@@ -71,7 +72,7 @@ export class MediaService {
     return this.prisma.media.create({
       data: {
         id,
-        ownerId: user.sub,
+        ownerId: user?.sub ?? null,
         key,
         type,
         mimeType: file.mimetype,
@@ -89,7 +90,7 @@ export class MediaService {
   async withUpload<T>(
     file: TempFile | undefined,
     expected: MediaType,
-    user: JwtPayload,
+    user: JwtPayload | null,
     save: (stored?: { mediaId: string; url: string }) => Promise<T>,
   ): Promise<T> {
     if (!file) return save();
@@ -116,15 +117,31 @@ export class MediaService {
     return this.queue.enqueue(id);
   }
 
-  // Deletes a media item and its files once no lesson or course uses it.
+  // A picture uploaded at sign-up belongs to the account once it exists.
+  async setOwner(id: string, ownerId: number): Promise<void> {
+    await this.prisma.media.update({ where: { id }, data: { ownerId } });
+  }
+
+  // How many lessons, courses (cover or intro) and users point at a media item;
+  // `liveOnly` skips soft-deleted lessons and courses.
+  private async usageCount(id: string, liveOnly: boolean): Promise<number> {
+    const live = liveOnly ? { isDeleted: false } : {};
+    const counts = await Promise.all([
+      this.prisma.lesson.count({ where: { ...live, contentMediaId: id } }),
+      this.prisma.course.count({
+        where: {
+          ...live,
+          OR: [{ thumbnailMediaId: id }, { introVideoMediaId: id }],
+        },
+      }),
+      this.prisma.user.count({ where: { imageMediaId: id } }),
+    ]);
+    return counts.reduce((a, b) => a + b, 0);
+  }
+
+  // Deletes a media item and its files once nothing uses it.
   async removeIfUnused(id: string): Promise<void> {
-    const used = await this.prisma.lesson.count({
-      where: { contentMediaId: id },
-    });
-    const usedAsCover = await this.prisma.course.count({
-      where: { thumbnailMediaId: id },
-    });
-    if (used + usedAsCover > 0) return;
+    if ((await this.usageCount(id, false)) > 0) return;
     const media = await this.prisma.media.findUnique({ where: { id } });
     if (!media) return;
     await this.storage.deleteObjects(this.keysOf(media));
@@ -240,17 +257,10 @@ export class MediaService {
 
   async remove(id: string, user: JwtPayload): Promise<void> {
     const media = await this.findOwned(id, user);
-    const used = await this.prisma.lesson.count({
-      where: {
-        isDeleted: false,
-        contentMediaId: id,
-      },
-    });
-    const usedAsCover = await this.prisma.course.count({
-      where: { isDeleted: false, thumbnailMediaId: id },
-    });
-    if (used + usedAsCover > 0) {
-      throw new ConflictException('This media is used by a lesson or course');
+    if ((await this.usageCount(id, true)) > 0) {
+      throw new ConflictException(
+        'This media is used by a lesson, course or profile',
+      );
     }
     await this.storage.deleteObjects(this.keysOf(media));
     await this.prisma.media.delete({ where: { id } });

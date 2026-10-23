@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
+import { MediaModule } from '../media/media.module.js';
 import { UsersModule } from '../users/users.module.js';
+import { AccountController } from './controllers/account.controller.js';
 import { AuthController } from './controllers/auth.controller.js';
 import { AuthService } from './services/auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
@@ -11,6 +13,7 @@ import { PermissionsGuard } from './guards/permissions.guard.js';
 @Module({
   imports: [
     UsersModule,
+    MediaModule,
     JwtModule.registerAsync({
       useFactory: () => {
         const secret = process.env.JWT_SECRET;
@@ -26,7 +29,7 @@ import { PermissionsGuard } from './guards/permissions.guard.js';
       },
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AccountController],
   providers: [
     AuthService,
     // Order matters: authenticate first, then check permissions.

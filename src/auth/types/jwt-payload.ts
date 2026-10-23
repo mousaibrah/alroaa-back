@@ -7,4 +7,6 @@ export interface JwtPayload {
   roleId: number;
   role: string;
   permissions: string[];
+  // Issued-at (seconds), set by the JWT library.
+  iat?: number;
 }

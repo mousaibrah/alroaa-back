@@ -1,18 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsEmail,
-  IsEnum,
   IsIn,
   IsISO8601,
   Matches,
   IsOptional,
   IsString,
-  IsUrl,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { RegisterRole } from '../../users/types/user-role.enum.js';
 
+// Everyone who registers gets the `user` role; there is no role field.
 export class RegisterDto {
   @ApiProperty({ example: 'John', maxLength: 100 })
   @IsString()
@@ -23,18 +22,6 @@ export class RegisterDto {
   @IsString()
   @MaxLength(100)
   lastName: string;
-
-  @ApiPropertyOptional({ example: 'جون', maxLength: 100 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  firstNameAr?: string;
-
-  @ApiPropertyOptional({ example: 'دو', maxLength: 100 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  lastNameAr?: string;
 
   @ApiProperty({ example: 'john.doe@example.com' })
   @IsEmail()
@@ -47,13 +34,10 @@ export class RegisterDto {
   @MaxLength(72) // bcrypt ignores bytes past 72
   password: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/avatar.png' })
-  @IsOptional()
-  @IsUrl()
-  image?: string;
-
   @ApiPropertyOptional({ enum: [0, 1], description: '0 = male, 1 = female' })
   @IsOptional()
+  // Multipart forms send numbers as text.
+  @Type(() => Number)
   @IsIn([0, 1])
   gender?: 0 | 1;
 
@@ -67,13 +51,16 @@ export class RegisterDto {
     message: 'dob must be in YYYY-MM-DD format',
   })
   dob?: string;
+}
 
+// Swagger only: the multipart form is the fields above plus the profile
+// picture, which multer takes out of the body before validation.
+export class RegisterFormDto extends RegisterDto {
   @ApiPropertyOptional({
-    enum: RegisterRole,
-    default: RegisterRole.STUDENT,
-    description: 'Role to register as. `admin` cannot be chosen here.',
+    type: 'string',
+    format: 'binary',
+    description:
+      'Profile picture (jpeg, png, webp, gif), optional. Saved as `image`; a 320px copy replaces it once processed.',
   })
-  @IsOptional()
-  @IsEnum(RegisterRole)
-  role?: RegisterRole;
+  image?: unknown;
 }

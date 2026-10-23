@@ -87,7 +87,7 @@ export class MediaProcessorService {
             ...(result.size === undefined ? {} : { size: BigInt(result.size) }),
           },
         }),
-        ...this.fillLessons(media, result),
+        ...this.fillUsers(media, result),
       ]);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -104,9 +104,10 @@ export class MediaProcessorService {
     }
   }
 
-  // Lessons using this (public) file get its URL, the web MP4 for videos, and
-  // its duration when they have none.
-  private fillLessons(media: Media, result: Processed) {
+  // Lessons and course intros using this (public) file get its URL, the web
+  // MP4 for videos; lessons also get its duration when they have none. Users
+  // get the 320px WebP of their profile picture.
+  private fillUsers(media: Media, result: Processed) {
     if (media.isPrivate) return [];
     const url = this.storage.getPublicUrl(
       result.variants.mp4?.key ?? media.key,
@@ -115,6 +116,14 @@ export class MediaProcessorService {
       this.prisma.lesson.updateMany({
         where: { contentMediaId: media.id },
         data: { contentUrl: url },
+      }),
+      this.prisma.course.updateMany({
+        where: { introVideoMediaId: media.id },
+        data: { introVideoUrl: url },
+      }),
+      this.prisma.user.updateMany({
+        where: { imageMediaId: media.id },
+        data: { image: this.storage.getPublicUrl(result.thumbnailKey) },
       }),
     ];
     if (result.durationSec !== null) {

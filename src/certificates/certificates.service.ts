@@ -39,12 +39,7 @@ export class CertificatesService {
 		const [user, course, lessons] = await Promise.all([
 			this.prisma.user.findUniqueOrThrow({
 				where: { id: userId },
-				select: {
-					firstName: true,
-					lastName: true,
-					firstNameAr: true,
-					lastNameAr: true,
-				},
+				select: { firstName: true, lastName: true },
 			}),
 			this.prisma.course.findUniqueOrThrow({
 				where: { id: courseId },
@@ -59,8 +54,6 @@ export class CertificatesService {
 			}),
 		]);
 
-		const holderNameAr = `${user.firstNameAr ?? ''} ${user.lastNameAr ?? ''}`.trim();
-
 		for (let attempt = 0; ; attempt++) {
 			try {
 				return await this.prisma.certificate.create({
@@ -71,7 +64,6 @@ export class CertificatesService {
 						// The attempt that finished the course (the latest pass).
 						attemptId: attemptId ?? passed[0].id,
 						holderName: `${user.firstName} ${user.lastName}`.trim(),
-						holderNameAr: holderNameAr || null,
 						courseTitleEn: course.titleEn,
 						courseTitleAr: course.titleAr,
 						learningSeconds: lessons._sum.durationSec ?? 0,

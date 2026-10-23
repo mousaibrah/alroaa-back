@@ -64,9 +64,10 @@ export class UpdateCourseDto extends PartialType(CreateCourseDto) {
   status?: CourseStatus;
 }
 
-// Swagger only: the multipart form is the course fields plus the cover image,
+// Swagger only: the multipart form is the course fields plus the cover image
+// and intro video,
 // which multer takes out of the body before validation.
-class CourseCover {
+class CourseFiles {
   @ApiPropertyOptional({
     type: 'string',
     format: 'binary',
@@ -74,16 +75,24 @@ class CourseCover {
       'Cover image (jpeg, png, webp, gif). Stored and saved as thumbnailUrl; resized in the background.',
   })
   thumbnail?: unknown;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description:
+      'Introduction video (mp4, webm, mov) for the overview page. Saved as introVideoUrl; processed in the background.',
+  })
+  introVideo?: unknown;
 }
 
 export class CreateCourseFormDto extends IntersectionType(
   CreateCourseDto,
-  CourseCover,
+  CourseFiles,
 ) {}
 
 export class UpdateCourseFormDto extends IntersectionType(
   UpdateCourseDto,
-  CourseCover,
+  CourseFiles,
 ) {}
 
 export class ListCoursesQueryDto {

@@ -41,6 +41,7 @@ const make = (
     },
     lesson: { count: vi.fn().mockResolvedValue(extra.used ?? 0) },
     course: { count: vi.fn().mockResolvedValue(0) },
+    user: { count: vi.fn().mockResolvedValue(0) },
   };
   const storage = {
     headObject: vi.fn().mockResolvedValue(extra.head ?? null),

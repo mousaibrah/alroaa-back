@@ -47,6 +47,7 @@ const make = (createFails = false) => {
       count: vi.fn().mockResolvedValue(0),
     },
     course: { count: vi.fn().mockResolvedValue(0) },
+    user: { count: vi.fn().mockResolvedValue(0) },
     media: {
       create: vi.fn(({ data }) => Promise.resolve(data)),
       findUnique: vi.fn(({ where }) =>

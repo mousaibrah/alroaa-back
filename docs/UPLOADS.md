@@ -34,7 +34,7 @@ set CORS (PUT, GET, HEAD from your frontend origins) and an anonymous `s3:GetObj
 
 ## Endpoints
 
-All need a bearer token with `courses.update` (admins and instructors). Owners see their own media; admins see all.
+All need a bearer token with `courses.update` (admins only). Owners see their own media; admins see all.
 
 | | |
 |---|---|
@@ -82,11 +82,14 @@ Lessons and course covers are uploaded with the form itself (multipart), not thr
 | Where | File field | Accepts |
 |---|---|---|
 | `POST /sections/:id/lessons`, `PATCH /lessons/:id` | `file` | video (video lesson) or image (text lesson); see Lessons below |
-| `POST /courses`, `PATCH /courses/:id` | `thumbnail` | image, up to `MAX_IMAGE_SIZE_MB`; optional |
+| `POST /courses`, `PATCH /courses/:id` | `thumbnail` | image, up to `MAX_IMAGE_SIZE_MB`; optional (`introVideo`: video, optional) |
+| `POST /auth/register` | `image` | image; optional. Public: the file has no owner until the account exists |
+| `PUT /users/me/image` | `image` | image; required. Any logged-in user, for their own picture |
 
 Both work the same way: the file is stored in RustFS (public `media/` prefix) as a media item, its URL is
-saved right away (`contentUrl` / `thumbnailUrl`), and processing runs in the background. For a course
-cover, `thumbnailUrl` switches to the 1280px WebP once it is processed. Sending a new file replaces the
+saved right away (`contentUrl` / `thumbnailUrl` / `introVideoUrl` / `image`), and processing runs in the background.
+Once processed, a course cover switches to the 1280px WebP, videos to the web MP4, and a profile picture to
+the 320px WebP. Sending a new file replaces the
 old one, whose files are deleted.
 
 ```js
@@ -99,7 +102,7 @@ await fetch(`${api}/courses`, { method: 'POST', headers: { Authorization: `Beare
 
 The presign endpoints above stay for other uses. Run `database/migrations/2026-10-22-course-thumbnail-media.sql`
 after the media one, then `database/migrations/2026-10-23-single-lesson-content.sql` (one content column per lesson).
-Not covered: `users.image` (there is no profile-update endpoint yet; registration is public and cannot upload).
+Run `database/migrations/2026-10-24-user-image-media.sql` for profile pictures.
 
 ## Lessons
 
