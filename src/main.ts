@@ -49,6 +49,11 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
+  // Node closes requests after 5 minutes by default, which aborts large video
+  // uploads on slow connections. UPLOAD_TIMEOUT_MIN raises that (default 60).
+  const server = app.getHttpServer();
+  server.requestTimeout = Number(process.env.UPLOAD_TIMEOUT_MIN ?? 60) * 60_000;
+
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 await bootstrap();
