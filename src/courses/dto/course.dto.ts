@@ -1,13 +1,16 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  IntersectionType,
+  PartialType,
+} from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
-  IsUUID,
   IsString,
-  IsUrl,
   Matches,
   Max,
   MaxLength,
@@ -41,6 +44,8 @@ export class CreateCourseDto {
 
   @ApiPropertyOptional({ example: 49.99, default: 0 })
   @IsOptional()
+  // Multipart forms send numbers as text.
+  @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(99999999.99)
@@ -50,21 +55,6 @@ export class CreateCourseDto {
   @IsOptional()
   @Matches(/^[A-Z]{3}$/, { message: 'currency must be a 3-letter ISO code' })
   currency?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsUrl()
-  thumbnailUrl?: string;
-
-  @ApiPropertyOptional({
-    format: 'uuid',
-    nullable: true,
-    description:
-      'Uploaded cover image (READY, public). Takes precedence over thumbnailUrl. null clears it.',
-  })
-  @IsOptional()
-  @IsUUID()
-  thumbnailMediaId?: string | null;
 }
 
 export class UpdateCourseDto extends PartialType(CreateCourseDto) {
@@ -73,6 +63,28 @@ export class UpdateCourseDto extends PartialType(CreateCourseDto) {
   @IsEnum(CourseStatus)
   status?: CourseStatus;
 }
+
+// Swagger only: the multipart form is the course fields plus the cover image,
+// which multer takes out of the body before validation.
+class CourseCover {
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description:
+      'Cover image (jpeg, png, webp, gif). Stored and saved as thumbnailUrl; resized in the background.',
+  })
+  thumbnail?: unknown;
+}
+
+export class CreateCourseFormDto extends IntersectionType(
+  CreateCourseDto,
+  CourseCover,
+) {}
+
+export class UpdateCourseFormDto extends IntersectionType(
+  UpdateCourseDto,
+  CourseCover,
+) {}
 
 export class ListCoursesQueryDto {
   @ApiPropertyOptional({

@@ -8,6 +8,8 @@ import type { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from '../services/course-access.service.js';
 import { assertSameIds } from '../utils/reorder.util.js';
 import { SectionsService } from '../services/sections.service.js';
+import { CoursesService } from '../services/courses.service.js';
+import type { MediaService } from '../../media/services/media.service.js';
 
 const user = (sub: number, role = 'instructor'): JwtPayload => ({
   sub,
@@ -133,5 +135,81 @@ describe('SectionsService', () => {
     });
     await service.create(10, user(5), { titleEn: 'First', titleAr: 'First' });
     expect(prisma.courseSection.create.mock.calls[0][0].data.sortOrder).toBe(0);
+  });
+});
+
+describe('CoursesService cover upload', () => {
+  const cover = {
+    path: '/tmp/x',
+    originalname: 'c.png',
+    mimetype: 'image/png',
+    size: 1,
+  };
+  const row = (data: object) => ({
+    id: 1,
+    price: 0,
+    thumbnailMedia: null,
+    ...data,
+  });
+
+  const make = () => {
+    const prisma = {
+      course: {
+        create: vi.fn(({ data }) => Promise.resolve(row(data))),
+        update: vi.fn(({ data }) => Promise.resolve(row(data))),
+      },
+    };
+    const media = {
+      // Stands in for MediaService.withUpload: the file is "stored" as m2.
+      withUpload: vi.fn((file, _type, _user, save) =>
+        save(file ? { mediaId: 'm2', url: 'http://s3/c.png' } : undefined),
+      ),
+      removeIfUnused: vi.fn().mockResolvedValue(undefined),
+      publicUrl: (key: string) => key,
+    };
+    const access = {
+      courseForManage: vi
+        .fn()
+        .mockResolvedValue({ id: 1, thumbnailMediaId: 'm1' }),
+    };
+    const service = new CoursesService(
+      prisma as unknown as PrismaService,
+      access as unknown as CourseAccessService,
+      media as unknown as MediaService,
+    );
+    return { service, prisma, media };
+  };
+
+  it('saves the uploaded cover URL and media on create', async () => {
+    const { service, prisma, media } = make();
+    const out = await service.create(
+      user(5),
+      { titleEn: 'A', titleAr: 'A' },
+      cover,
+    );
+    expect(media.withUpload.mock.calls[0][1]).toBe('image');
+    expect(prisma.course.create.mock.calls[0][0].data).toMatchObject({
+      thumbnailUrl: 'http://s3/c.png',
+      thumbnailMediaId: 'm2',
+    });
+    expect(out.thumbnailUrl).toBe('http://s3/c.png');
+  });
+
+  it('replaces the cover on update and deletes the old one', async () => {
+    const { service, prisma, media } = make();
+    await service.update(1, user(5), {}, cover);
+    expect(prisma.course.update.mock.calls[0][0].data).toMatchObject({
+      thumbnailMediaId: 'm2',
+    });
+    expect(media.removeIfUnused).toHaveBeenCalledWith('m1');
+  });
+
+  it('keeps the cover when no file is sent', async () => {
+    const { service, prisma, media } = make();
+    await service.update(1, user(5), { titleEn: 'B' });
+    expect(prisma.course.update.mock.calls[0][0].data).not.toHaveProperty(
+      'thumbnailMediaId',
+    );
+    expect(media.removeIfUnused).not.toHaveBeenCalled();
   });
 });

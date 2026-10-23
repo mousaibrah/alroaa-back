@@ -24,7 +24,7 @@ import { Permission } from '../../auth/constants/permissions.js';
 import { UpdateLessonDto, UpdateLessonFormDto } from '../dto/lesson.dto.js';
 import type { TempFile } from '../../media/services/media.service.js';
 import { LessonsService } from '../services/lessons.service.js';
-import { LessonFileInterceptor } from '../utils/lesson-file.interceptor.js';
+import { UploadInterceptor } from '../../media/utils/upload.interceptor.js';
 
 @ApiTags('Lessons')
 @ApiBearerAuth()
@@ -41,7 +41,7 @@ export class LessonsController {
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateLessonFormDto })
-  @UseInterceptors(LessonFileInterceptor())
+  @UseInterceptors(UploadInterceptor('file'))
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseIntPipe) id: number,

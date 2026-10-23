@@ -28,7 +28,7 @@ import { ReorderDto } from '../dto/reorder.dto.js';
 import { UpdateSectionDto } from '../dto/section.dto.js';
 import type { TempFile } from '../../media/services/media.service.js';
 import { LessonsService } from '../services/lessons.service.js';
-import { LessonFileInterceptor } from '../utils/lesson-file.interceptor.js';
+import { UploadInterceptor } from '../../media/utils/upload.interceptor.js';
 import { SectionsService } from '../services/sections.service.js';
 
 @ApiTags('Sections')
@@ -69,7 +69,7 @@ export class SectionsController {
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: CreateLessonFormDto })
-  @UseInterceptors(LessonFileInterceptor())
+  @UseInterceptors(UploadInterceptor('file'))
   addLesson(
     @CurrentUser() user: JwtPayload,
     @Param('sectionId', ParseIntPipe) sectionId: number,

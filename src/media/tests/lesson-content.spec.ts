@@ -3,25 +3,46 @@ import {
   resolveLessonContent,
 } from '../utils/lesson-content.util.js';
 
-const lesson = (over: object = {}) => ({
-  contentUrl: null,
-  contentMedia: null,
-  ...over,
-});
+const lesson = (
+  over: {
+    contentUrl?: string | null;
+    contentMedia?: { id: string; status: string } | null;
+  } = {},
+) => ({ contentUrl: null, contentMedia: null, ...over });
 
 describe('resolveLessonContent', () => {
-  it('prefers media over the URL', () => {
-    const media = { id: 'm1' };
-    const out = resolveLessonContent(
-      lesson({ contentUrl: 'https://x/a.mp4', contentMedia: media }),
-    );
-    expect(out).toEqual({ source: 'media', media });
+  const url = 'https://x/a.mp4';
+
+  it('prefers ready media over the URL', () => {
+    const media = { id: 'm1', status: 'ready' };
+    expect(
+      resolveLessonContent(lesson({ contentUrl: url, contentMedia: media })),
+    ).toEqual({ source: 'media', media });
+  });
+
+  it('uses the URL while the media is not ready (or failed)', () => {
+    for (const status of ['uploaded', 'processing', 'failed']) {
+      expect(
+        resolveLessonContent(
+          lesson({ contentUrl: url, contentMedia: { id: 'm1', status } }),
+        ),
+      ).toEqual({ source: 'url', url });
+    }
+  });
+
+  it('returns unready media when there is no URL', () => {
+    const media = { id: 'm1', status: 'processing' };
+    expect(resolveLessonContent(lesson({ contentMedia: media }))).toEqual({
+      source: 'media',
+      media,
+    });
   });
 
   it('falls back to the URL when no media is set', () => {
-    expect(
-      resolveLessonContent(lesson({ contentUrl: 'https://x/a.mp4' })),
-    ).toEqual({ source: 'url', url: 'https://x/a.mp4' });
+    expect(resolveLessonContent(lesson({ contentUrl: url }))).toEqual({
+      source: 'url',
+      url,
+    });
   });
 
   it('returns null when the lesson has no content', () => {

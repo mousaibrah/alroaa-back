@@ -82,7 +82,7 @@ CREATE TABLE courses (
     description_en TEXT,
     description_ar TEXT,
     price          NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (price >= 0),
-    currency       CHAR(3) NOT NULL DEFAULT 'USD', -- ISO 4217 code
+    currency       CHAR(3) NOT NULL DEFAULT 'SAR', 
     status         course_status NOT NULL DEFAULT 'draft',
     author_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     thumbnail_url  TEXT,

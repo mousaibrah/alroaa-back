@@ -11,8 +11,16 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Public } from '../../auth/decorators/public.decorator.js';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator.js';
@@ -21,9 +29,13 @@ import { Permission } from '../../auth/constants/permissions.js';
 import { CoursesService } from '../services/courses.service.js';
 import {
   CreateCourseDto,
+  CreateCourseFormDto,
   ListCoursesQueryDto,
   UpdateCourseDto,
+  UpdateCourseFormDto,
 } from '../dto/course.dto.js';
+import type { TempFile } from '../../media/services/media.service.js';
+import { UploadInterceptor } from '../../media/utils/upload.interceptor.js';
 import { ReorderDto } from '../dto/reorder.dto.js';
 import { CreateSectionDto } from '../dto/section.dto.js';
 import { SectionsService } from '../services/sections.service.js';
@@ -39,9 +51,20 @@ export class CoursesController {
 
   @Post()
   @RequirePermissions(Permission.COURSES_CREATE)
-  @ApiOperation({ summary: 'Create a course (starts as a draft)' })
-  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateCourseDto) {
-    return this.courses.create(user, dto);
+  @ApiOperation({
+    summary: 'Create a course (starts as a draft)',
+    description:
+      'Send multipart/form-data with the cover image in `thumbnail` (optional).',
+  })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({ type: CreateCourseFormDto })
+  @UseInterceptors(UploadInterceptor('thumbnail', 'image'))
+  create(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateCourseDto,
+    @UploadedFile() thumbnail?: TempFile,
+  ) {
+    return this.courses.create(user, dto, thumbnail);
   }
 
   @Get()
@@ -71,13 +94,21 @@ export class CoursesController {
 
   @Patch(':id')
   @RequirePermissions(Permission.COURSES_UPDATE)
-  @ApiOperation({ summary: 'Update a course (author or admin)' })
+  @ApiOperation({
+    summary: 'Update a course (author or admin)',
+    description:
+      'Send multipart/form-data with a new cover image in `thumbnail` to replace it.',
+  })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({ type: UpdateCourseFormDto })
+  @UseInterceptors(UploadInterceptor('thumbnail', 'image'))
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCourseDto,
+    @UploadedFile() thumbnail?: TempFile,
   ) {
-    return this.courses.update(id, user, dto);
+    return this.courses.update(id, user, dto, thumbnail);
   }
 
   @Delete(':id')

@@ -1,4 +1,3 @@
-import { rm } from 'node:fs/promises';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import {
@@ -8,13 +7,19 @@ import {
 import { contentStatus } from '../../media/utils/lesson-content.util.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from './course-access.service.js';
-import type { LessonType } from '../../generated/prisma/enums.js';
+import type { LessonType, MediaType } from '../../generated/prisma/enums.js';
 import type { CreateLessonDto, UpdateLessonDto } from '../dto/lesson.dto.js';
 import { assertSameIds } from '../utils/reorder.util.js';
 
 const WITH_STATUS = {
   contentMedia: { select: { status: true } },
 } as const;
+
+// What each lesson type holds.
+const FILE_TYPE = { video: 'video', text: 'image' } as const satisfies Record<
+  LessonType,
+  MediaType
+>;
 
 @Injectable()
 export class LessonsService {
@@ -23,35 +28,6 @@ export class LessonsService {
     private readonly access: CourseAccessService,
     private readonly media: MediaService,
   ) {}
-
-  // Stores the uploaded file, runs `save` with its media id and URL, then queues
-  // the processing, which swaps the URL for the web MP4 and fills the duration.
-  // The temp file is always removed; if saving fails the stored file is too.
-  private async withFile<T>(
-    file: TempFile | undefined,
-    lessonType: LessonType,
-    user: JwtPayload,
-    save: (stored?: { mediaId: string; url: string }) => Promise<T>,
-  ): Promise<T> {
-    if (!file) return save();
-    try {
-      const media = await this.media.storeLessonFile(file, lessonType, user);
-      let saved: T;
-      try {
-        saved = await save({
-          mediaId: media.id,
-          url: this.media.publicUrl(media.key),
-        });
-      } catch (error) {
-        await this.media.removeIfUnused(media.id).catch(() => undefined);
-        throw error;
-      }
-      await this.media.enqueue(media.id);
-      return saved;
-    } finally {
-      await rm(file.path, { force: true });
-    }
-  }
 
   private withStatus<
     L extends {
@@ -86,24 +62,28 @@ export class LessonsService {
       where: { sectionId, isDeleted: false },
       _max: { sortOrder: true },
     });
-    const lesson = await this.withFile(file, dto.lessonType, user, (stored) =>
-      this.prisma.lesson.create({
-        data: {
-          sectionId,
-          titleEn: dto.titleEn,
-          titleAr: dto.titleAr,
-          descriptionEn: dto.descriptionEn,
-          descriptionAr: dto.descriptionAr,
-          lessonType: dto.lessonType,
-          contentUrl: stored?.url,
-          contentMediaId: stored?.mediaId,
-          // Left empty, it is filled from the video.
-          durationSec: dto.durationSec,
-          isPreview: dto.isPreview ?? false,
-          sortOrder: (last._max.sortOrder ?? -1) + 1,
-        },
-        include: WITH_STATUS,
-      }),
+    const lesson = await this.media.withUpload(
+      file,
+      FILE_TYPE[dto.lessonType],
+      user,
+      (stored) =>
+        this.prisma.lesson.create({
+          data: {
+            sectionId,
+            titleEn: dto.titleEn,
+            titleAr: dto.titleAr,
+            descriptionEn: dto.descriptionEn,
+            descriptionAr: dto.descriptionAr,
+            lessonType: dto.lessonType,
+            contentUrl: stored?.url,
+            contentMediaId: stored?.mediaId,
+            // Left empty, it is filled from the video.
+            durationSec: dto.durationSec,
+            isPreview: dto.isPreview ?? false,
+            sortOrder: (last._max.sortOrder ?? -1) + 1,
+          },
+          include: WITH_STATUS,
+        }),
     );
     return this.withStatus(lesson);
   }
@@ -124,23 +104,27 @@ export class LessonsService {
         'Upload a new file when changing the lesson type',
       );
     }
-    const lesson = await this.withFile(file, lessonType, user, (stored) =>
-      this.prisma.lesson.update({
-        where: { id },
-        data: {
-          titleEn: dto.titleEn,
-          titleAr: dto.titleAr,
-          descriptionEn: dto.descriptionEn,
-          descriptionAr: dto.descriptionAr,
-          lessonType: dto.lessonType,
-          ...(stored
-            ? { contentMediaId: stored.mediaId, contentUrl: stored.url }
-            : {}),
-          durationSec: dto.durationSec,
-          isPreview: dto.isPreview,
-        },
-        include: WITH_STATUS,
-      }),
+    const lesson = await this.media.withUpload(
+      file,
+      FILE_TYPE[lessonType],
+      user,
+      (stored) =>
+        this.prisma.lesson.update({
+          where: { id },
+          data: {
+            titleEn: dto.titleEn,
+            titleAr: dto.titleAr,
+            descriptionEn: dto.descriptionEn,
+            descriptionAr: dto.descriptionAr,
+            lessonType: dto.lessonType,
+            ...(stored
+              ? { contentMediaId: stored.mediaId, contentUrl: stored.url }
+              : {}),
+            durationSec: dto.durationSec,
+            isPreview: dto.isPreview,
+          },
+          include: WITH_STATUS,
+        }),
     );
     if (file && current.contentMediaId) {
       await this.media

@@ -4,7 +4,10 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { MediaService } from '../../media/services/media.service.js';
+import {
+  MediaService,
+  type TempFile,
+} from '../../media/services/media.service.js';
 import { contentStatus } from '../../media/utils/lesson-content.util.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -34,41 +37,42 @@ export class CoursesService {
     return toCourse(course, (key) => this.media.publicUrl(key));
   }
 
-  async create(user: JwtPayload, dto: CreateCourseDto) {
-    const base = slugify(dto.titleEn);
-    for (let attempt = 0; ; attempt++) {
-      const slug =
-        attempt === 0
-          ? base
-          : `${base}-${Math.random().toString(36).slice(2, 8)}`;
-      try {
-        if (dto.thumbnailMediaId) {
-          await this.media.assertCover(dto.thumbnailMediaId, user);
-        }
-        const course = await this.prisma.course.create({
-          include: {
-            thumbnailMedia: {
-              select: { key: true, status: true, variants: true },
+  // The cover image, when sent, is stored once; thumbnailUrl points at it right
+  // away and switches to the resized WebP once it is processed.
+  create(user: JwtPayload, dto: CreateCourseDto, thumbnail?: TempFile) {
+    return this.media.withUpload(thumbnail, 'image', user, async (stored) => {
+      const base = slugify(dto.titleEn);
+      for (let attempt = 0; ; attempt++) {
+        const slug =
+          attempt === 0
+            ? base
+            : `${base}-${Math.random().toString(36).slice(2, 8)}`;
+        try {
+          const course = await this.prisma.course.create({
+            include: {
+              thumbnailMedia: {
+                select: { key: true, status: true, variants: true },
+              },
             },
-          },
-          data: {
-            titleEn: dto.titleEn,
-            titleAr: dto.titleAr,
-            slug,
-            descriptionEn: dto.descriptionEn,
-            descriptionAr: dto.descriptionAr,
-            price: dto.price,
-            currency: dto.currency,
-            thumbnailUrl: dto.thumbnailUrl,
-            thumbnailMediaId: dto.thumbnailMediaId,
-            authorId: user.sub,
-          },
-        });
-        return this.present(course);
-      } catch (error) {
-        if (!isSlugConflict(error) || attempt >= 5) throw error;
+            data: {
+              titleEn: dto.titleEn,
+              titleAr: dto.titleAr,
+              slug,
+              descriptionEn: dto.descriptionEn,
+              descriptionAr: dto.descriptionAr,
+              price: dto.price,
+              currency: dto.currency,
+              thumbnailUrl: stored?.url,
+              thumbnailMediaId: stored?.mediaId,
+              authorId: user.sub,
+            },
+          });
+          return this.present(course);
+        } catch (error) {
+          if (!isSlugConflict(error) || attempt >= 5) throw error;
+        }
       }
-    }
+    });
   }
 
   // `user` is undefined for guests, who only see the published catalogue.
@@ -273,28 +277,45 @@ export class CoursesService {
     };
   }
 
-  async update(id: number, user: JwtPayload, dto: UpdateCourseDto) {
-    await this.access.courseForManage(id, user);
-    if (dto.thumbnailMediaId) {
-      await this.media.assertCover(dto.thumbnailMediaId, user);
+  // A new cover replaces the old one, whose files are deleted.
+  async update(
+    id: number,
+    user: JwtPayload,
+    dto: UpdateCourseDto,
+    thumbnail?: TempFile,
+  ) {
+    const current = await this.access.courseForManage(id, user);
+    const course = await this.media.withUpload(
+      thumbnail,
+      'image',
+      user,
+      (stored) =>
+        this.prisma.course.update({
+          where: { id },
+          include: {
+            thumbnailMedia: {
+              select: { key: true, status: true, variants: true },
+            },
+          },
+          data: {
+            titleEn: dto.titleEn,
+            titleAr: dto.titleAr,
+            descriptionEn: dto.descriptionEn,
+            descriptionAr: dto.descriptionAr,
+            price: dto.price,
+            currency: dto.currency,
+            status: dto.status,
+            ...(stored
+              ? { thumbnailUrl: stored.url, thumbnailMediaId: stored.mediaId }
+              : {}),
+          },
+        }),
+    );
+    if (thumbnail && current.thumbnailMediaId) {
+      await this.media
+        .removeIfUnused(current.thumbnailMediaId)
+        .catch(() => undefined);
     }
-    const course = await this.prisma.course.update({
-      where: { id },
-      include: {
-        thumbnailMedia: { select: { key: true, status: true, variants: true } },
-      },
-      data: {
-        titleEn: dto.titleEn,
-        titleAr: dto.titleAr,
-        descriptionEn: dto.descriptionEn,
-        descriptionAr: dto.descriptionAr,
-        price: dto.price,
-        currency: dto.currency,
-        thumbnailUrl: dto.thumbnailUrl,
-        thumbnailMediaId: dto.thumbnailMediaId,
-        status: dto.status,
-      },
-    });
     return this.present(course);
   }
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import {
   BadRequestException,
   ConflictException,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import type { Media } from '../../generated/prisma/client.js';
-import type { LessonType } from '../../generated/prisma/enums.js';
+import type { MediaType } from '../../generated/prisma/enums.js';
 import { UserRole } from '../../users/types/user-role.enum.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { ListMediaQueryDto, PresignMediaDto } from '../dto/media.dto.js';
@@ -36,9 +37,6 @@ export type MediaVariants = Record<
   { key: string; width?: number; height?: number }
 >;
 
-// Lesson types and the media they can hold.
-const MEDIA_FOR_LESSON = { video: 'video', text: 'image' } as const;
-
 @Injectable()
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
@@ -49,18 +47,17 @@ export class MediaService {
     private readonly queue: MediaQueueService,
   ) {}
 
-  // A file sent with the lesson form: stored in the public part of the bucket
-  // as an UPLOADED media item. Call `enqueue` once the lesson points at it; the
-  // processor then fills the lesson's content URL and duration.
-  async storeLessonFile(
+  // A file sent with a form (lesson content, course cover): stored in the
+  // public part of the bucket as an UPLOADED media item. Use `withUpload`.
+  private async storeFile(
     file: TempFile,
-    lessonType: LessonType,
+    expected: MediaType,
     user: JwtPayload,
   ): Promise<Media> {
     const { type, ext } = validateUpload(file.mimetype, file.size);
-    if (type !== MEDIA_FOR_LESSON[lessonType]) {
+    if (type !== expected) {
       throw new BadRequestException(
-        `A ${lessonType} lesson needs a ${MEDIA_FOR_LESSON[lessonType]} file`,
+        `The file must be ${expected === 'image' ? 'an' : 'a'} ${expected}`,
       );
     }
     const id = randomUUID();
@@ -83,6 +80,36 @@ export class MediaService {
         status: 'uploaded',
       },
     });
+  }
+
+  // Stores the uploaded file, runs `save` with its media id and public URL,
+  // then queues the processing (web MP4 and duration for videos, WebP sizes for
+  // images). The temp file is always removed; if saving fails the stored file
+  // is too. Without a file, `save` runs with nothing.
+  async withUpload<T>(
+    file: TempFile | undefined,
+    expected: MediaType,
+    user: JwtPayload,
+    save: (stored?: { mediaId: string; url: string }) => Promise<T>,
+  ): Promise<T> {
+    if (!file) return save();
+    try {
+      const media = await this.storeFile(file, expected, user);
+      let saved: T;
+      try {
+        saved = await save({
+          mediaId: media.id,
+          url: this.storage.getPublicUrl(media.key),
+        });
+      } catch (error) {
+        await this.removeIfUnused(media.id).catch(() => undefined);
+        throw error;
+      }
+      await this.queue.enqueue(media.id);
+      return saved;
+    } finally {
+      await rm(file.path, { force: true });
+    }
   }
 
   enqueue(id: string): Promise<void> {
@@ -242,24 +269,6 @@ export class MediaService {
 
   publicUrl(key: string): string {
     return this.storage.getPublicUrl(key);
-  }
-
-  // A course cover must be a READY, public image the caller may use.
-  async assertCover(id: string, user: JwtPayload): Promise<Media> {
-    const media = await this.prisma.media.findUnique({ where: { id } });
-    if (!media) throw new BadRequestException(`Media ${id} not found`);
-    if (!this.canAccess(user, media)) {
-      throw new ForbiddenException('You can only use your own media');
-    }
-    if (media.status !== 'ready') {
-      throw new BadRequestException(
-        `Media ${id} is not ready (${media.status})`,
-      );
-    }
-    if (media.type !== 'image' || media.isPrivate) {
-      throw new BadRequestException('A cover must be a public image');
-    }
-    return media;
   }
 
   // The URL a browser may use now: signed for private media, public otherwise.
