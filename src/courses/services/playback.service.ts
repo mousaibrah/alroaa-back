@@ -40,9 +40,7 @@ export class PlaybackService {
     private readonly media: MediaService,
   ) {}
 
-  // `lang` picks the recording language; the other one is the fallback when a
-  // lesson exists in a single language.
-  async resolve(lessonId: number, user: JwtPayload, lang: 'en' | 'ar' = 'en') {
+  async resolve(lessonId: number, user: JwtPayload) {
     const lesson = await this.prisma.lesson.findFirst({
       where: {
         id: lessonId,
@@ -52,10 +50,8 @@ export class PlaybackService {
       select: {
         id: true,
         lessonType: true,
-        contentUrlEn: true,
-        contentUrlAr: true,
-        contentMediaEn: { select: MEDIA_SELECT },
-        contentMediaAr: { select: MEDIA_SELECT },
+        contentUrl: true,
+        contentMedia: { select: MEDIA_SELECT },
         isPreview: true,
         section: {
           select: {
@@ -72,8 +68,8 @@ export class PlaybackService {
     if (!manages && course.status !== 'published') {
       throw new NotFoundException('Lesson not found');
     }
-    // An uploaded video wins over the legacy URL (per language, then fallback).
-    const content = resolveLessonContent(lesson, lang);
+    // An uploaded video wins over the stored URL.
+    const content = resolveLessonContent(lesson);
     if (lesson.lessonType !== 'video' || !content) {
       throw new NotFoundException('This lesson has no video');
     }

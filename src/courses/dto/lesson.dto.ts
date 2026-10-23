@@ -1,12 +1,16 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  IntersectionType,
+  PartialType,
+} from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
   IsString,
-  IsUrl,
-  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -41,36 +45,12 @@ export class CreateLessonDto {
   lessonType: LessonType;
 
   @ApiPropertyOptional({
-    example: 'https://cdn.example.com/lesson1-en.mp4',
+    example: 600,
     description:
-      'English video/file. Fill only one if the lesson has a single language.',
+      'Duration in seconds. Leave empty to have it read from the uploaded video.',
   })
   @IsOptional()
-  @IsUrl()
-  contentUrlEn?: string;
-
-  @ApiPropertyOptional({ example: 'https://cdn.example.com/lesson1-ar.mp4' })
-  @IsOptional()
-  @IsUrl()
-  contentUrlAr?: string;
-
-  @ApiPropertyOptional({
-    format: 'uuid',
-    nullable: true,
-    description:
-      'Uploaded English media (READY, matching the lesson type). Takes precedence over contentUrlEn. null clears it.',
-  })
-  @IsOptional()
-  @IsUUID()
-  contentMediaEnId?: string | null;
-
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
-  @IsOptional()
-  @IsUUID()
-  contentMediaArId?: string | null;
-
-  @ApiPropertyOptional({ example: 600, description: 'Duration in seconds' })
-  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   durationSec?: number;
@@ -80,8 +60,34 @@ export class CreateLessonDto {
     description: 'Preview lessons are visible without enrolling',
   })
   @IsOptional()
+  // Multipart forms send "true"/"false" as text.
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
   @IsBoolean()
   isPreview?: boolean;
 }
 
 export class UpdateLessonDto extends PartialType(CreateLessonDto) {}
+
+// Swagger only: the multipart form is the lesson fields plus the files, which
+// multer takes out of the body before validation.
+class LessonFiles {
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'binary',
+    description:
+      'Video (video lesson) or image (text lesson). Required when creating. Processed in the background; contentUrl is set when done.',
+  })
+  file?: unknown;
+}
+
+export class CreateLessonFormDto extends IntersectionType(
+  CreateLessonDto,
+  LessonFiles,
+) {}
+
+export class UpdateLessonFormDto extends IntersectionType(
+  UpdateLessonDto,
+  LessonFiles,
+) {}

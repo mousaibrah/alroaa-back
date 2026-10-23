@@ -70,31 +70,60 @@ async function upload(file, token, api = 'http://localhost:3000', isPrivate = fa
   await fetch(`${api}/media/${p.mediaId}/confirm`, { method: 'POST', headers: auth });
   return p.mediaId; // poll GET /media/:id until status === 'ready'
 }
-// attach to a lesson (new field per language; the old contentUrlEn/Ar still work)
+// attach to a lesson
 await fetch(`${api}/lessons/${lessonId}`, { method: 'PATCH', headers: auth,
-  body: JSON.stringify({ contentMediaEnId: mediaId }) });
+  body: JSON.stringify({ contentMediaId: mediaId }) });
 ```
 
 ## Where uploads are used
 
-Upload once (presign → PUT → confirm), then pass the `mediaId` in the body:
+Upload once (presign → PUT → confirm), then pass the `mediaId` in the body (lessons work differently, see below):
 
 | Where | Field | Rules |
 |---|---|---|
-| Lessons: `POST /sections/:id/lessons`, `PATCH /lessons/:id` | `contentMediaEnId`, `contentMediaArId` | see Lessons below |
 | `POST /courses`, `PATCH /courses/:id` | `thumbnailMediaId` | READY, **public** image; wins over `thumbnailUrl`; `null` clears |
 
 Course responses keep returning `thumbnailUrl` (the uploaded cover's 1280px WebP when set) plus `thumbnailMediaId`.
-Run `database/migrations/2026-10-22-course-thumbnail-media.sql` after the media one.
+Run `database/migrations/2026-10-22-course-thumbnail-media.sql` after the media one, then
+`database/migrations/2026-10-23-single-lesson-content.sql` (one content column per lesson).
 Not covered: `users.image` (there is no profile-update endpoint yet; registration is public and cannot upload).
 
 ## Lessons
 
-- `contentMediaEnId` / `contentMediaArId`: the media must exist, be `ready`, belong to the caller (or an admin), and match the lesson type (`video` lesson → video, `text` lesson → image). `null` clears it.
-- Precedence per language: media, else the legacy `contentUrlEn/Ar`; the other language is the fallback.
-- An empty `durationSec` is filled from the video.
-- **Paid content:** a video in a non-preview lesson must be uploaded with `isPrivate: true`. Private files live under `private/` (never public) and are served only by `GET /lessons/:id/playback`, which runs the enrollment/payment/unlock checks and returns a 1-hour presigned URL. Preview lessons may use public videos.
-- Private media's thumbnails and posters are signed too.
+A lesson is created in one multipart request: the lesson fields plus the file. The request returns
+right away; the file is processed in the background and its URL saved on the lesson.
+
+| Field | |
+|---|---|
+| `titleEn`, `titleAr` | required |
+| `descriptionEn`, `descriptionAr` | optional |
+| `lessonType` | `video` or `text` |
+| `durationSec` | optional; left empty it is read from the video |
+| `isPreview` | optional, `true` / `false` |
+| `file` | required on create (video for a `video` lesson, image for a `text` lesson); optional on `PATCH`, where it replaces the content |
+
+```js
+const form = new FormData();
+form.append('titleEn', 'Intro'); form.append('titleAr', 'مقدمة');
+form.append('lessonType', 'video');
+form.append('file', file); // a File or Blob from <input type="file">
+const lesson = await (await fetch(`${api}/sections/${sectionId}/lessons`, {
+  method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form, // no Content-Type: the browser sets it
+})).json();
+// lesson.contentUrl is the uploaded file's URL, lesson.contentStatus === 'processing'
+```
+
+What happens:
+
+1. During the request: the file is checked (type, size) and stored in RustFS under the public `media/` prefix as a media item, the lesson is saved with `content_url` = that file's URL, and a pg-boss job is queued.
+2. In the background: ffprobe/ffmpeg make the poster and a web-friendly MP4. Then `content_url` is switched to
+   that MP4's public URL (images keep the original) and `duration_sec` is filled if it was empty.
+   This needs `ffmpeg` and `ffprobe` installed (`brew install ffmpeg`).
+3. The lesson's `contentStatus` (in the lesson and course responses for editors) goes
+   `processing` → `ready`, or `failed`. On `PATCH` with a new file the old file is deleted.
+
+Lesson content is one file for both languages. Its URL is public, so anyone with the link can open it,
+paid lessons included.
 
 ## When we deploy later (not part of this task)
 

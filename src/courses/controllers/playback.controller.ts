@@ -1,18 +1,5 @@
-import {
-  Controller,
-  Get,
-  Header,
-  Param,
-  ParseEnumPipe,
-  ParseIntPipe,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+import { Controller, Get, Header, Param, ParseIntPipe } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
@@ -34,13 +21,10 @@ export class PlaybackController {
     description:
       'Checks enrollment, payment and lesson order, then returns the video URL (signed when PLAYBACK_SIGNING_SECRET is set) with its kind (hls or file) and expiry. Call again when it expires.',
   })
-  @ApiQuery({ name: 'lang', enum: ['en', 'ar'], required: false })
   resolve(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseIntPipe) id: number,
-    @Query('lang', new ParseEnumPipe(['en', 'ar'], { optional: true }))
-    lang?: 'en' | 'ar',
   ) {
-    return this.playback.resolve(id, user, lang);
+    return this.playback.resolve(id, user);
   }
 }

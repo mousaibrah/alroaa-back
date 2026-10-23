@@ -41,3 +41,28 @@ AND NOT EXISTS (
 -- Explicit ids were used above, so move the sequences past them.
 SELECT setval(pg_get_serial_sequence('roles', 'id'), (SELECT MAX(id) FROM roles));
 SELECT setval(pg_get_serial_sequence('permissions', 'id'), (SELECT MAX(id) FROM permissions));
+
+
+
+INSERT INTO users (
+    dob,
+    email,
+    first_name,
+    gender,
+    image,
+    is_deleted,
+    last_name,
+    password,
+    role_id
+)
+VALUES (
+    '1999-11-05',
+    'admin@rnec.sa',
+    'Admin',
+    NULL,
+    NULL,
+    FALSE,
+    'Admin',
+    '$2b$10$5cKlaDpgv9xuH0YtHGeBaunGV0z4PHRZDykR6EX3k3ei/HHh91udu',
+    1
+);

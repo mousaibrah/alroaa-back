@@ -10,9 +10,7 @@
 --   * Run this ONCE on an empty courses table (courses use ON CONFLICT on
 --     slug, but sections/lessons/exams are not de-duplicated).
 --   * Prices are stored BEFORE tax (design shows 300 + 15% VAT = 345 SAR).
---   * content_url_* / thumbnail_url are placeholders: replace with real assets.
---     Both content_url_en and content_url_ar get the same placeholder here;
---     point content_url_en at English recordings once they exist.
+--   * content_url / thumbnail_url are placeholders: replace with real assets.
 --   * Arabic text is the original content; English is a translation of it.
 -- =====================================================================
 
@@ -40,14 +38,14 @@ CREATE FUNCTION pg_temp.add_lesson(
     p_url text, p_duration_sec int, p_preview boolean DEFAULT FALSE
 ) RETURNS void AS $$
     INSERT INTO lessons (section_id, title_en, title_ar, description_en, description_ar,
-                         lesson_type, content_url_en, content_url_ar,
+                         lesson_type, content_url,
                          duration_sec, sort_order, is_preview)
     VALUES (
         (SELECT s.id FROM course_sections s
            JOIN courses c ON c.id = s.course_id
           WHERE c.slug = p_course_slug AND s.sort_order = p_section_sort),
         p_title_en, p_title_ar, p_description_en, p_description_ar,
-        p_type, p_url, p_url, p_duration_sec, p_sort, p_preview);
+        p_type, p_url, p_duration_sec, p_sort, p_preview);
 $$ LANGUAGE sql;
 
 CREATE FUNCTION pg_temp.add_exam(

@@ -66,7 +66,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
           titleAr: title,
           lessonType: 'video',
           durationSec: 100,
-          contentUrlEn: `https://x.com/${title}.mp4`,
+          contentUrl: `https://x.com/${title}.mp4`,
           isPreview,
         });
       free1 = (await mkLesson('free1', true)).id;
@@ -151,12 +151,12 @@ describe.skipIf(!process.env.SCRATCH_URL)(
         'https://x.com/paid2.mp4',
       );
       // the stored address stays private: learners never get it, authors do
-      expect((await lessonsOf()).every((l) => l.contentUrlEn === null)).toBe(
+      expect((await lessonsOf()).every((l) => l.contentUrl === null)).toBe(
         true,
       );
       const authorView = await courses.get(courseId, teacher);
       expect(
-        authorView.sections.flatMap((x) => x.lessons).map((l) => l.contentUrlEn),
+        authorView.sections.flatMap((x) => x.lessons).map((l) => l.contentUrl),
       ).toEqual(['https://x.com/free1.mp4', 'https://x.com/paid2.mp4']);
       const [, l2] = await lessonsOf();
       expect(l2).toMatchObject({

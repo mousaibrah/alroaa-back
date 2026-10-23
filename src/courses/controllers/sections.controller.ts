@@ -9,16 +9,26 @@ import {
   Patch,
   Post,
   Put,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { Permission } from '../../auth/constants/permissions.js';
-import { CreateLessonDto } from '../dto/lesson.dto.js';
+import { CreateLessonDto, CreateLessonFormDto } from '../dto/lesson.dto.js';
 import { ReorderDto } from '../dto/reorder.dto.js';
 import { UpdateSectionDto } from '../dto/section.dto.js';
+import type { TempFile } from '../../media/services/media.service.js';
 import { LessonsService } from '../services/lessons.service.js';
+import { LessonFileInterceptor } from '../utils/lesson-file.interceptor.js';
 import { SectionsService } from '../services/sections.service.js';
 
 @ApiTags('Sections')
@@ -52,13 +62,21 @@ export class SectionsController {
   }
 
   @Post(':sectionId/lessons')
-  @ApiOperation({ summary: 'Add a lesson at the end of the section' })
+  @ApiOperation({
+    summary: 'Add a lesson at the end of the section',
+    description:
+      'Send multipart/form-data with a `file` field to upload the content; the stored file URL is saved on the lesson.',
+  })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({ type: CreateLessonFormDto })
+  @UseInterceptors(LessonFileInterceptor())
   addLesson(
     @CurrentUser() user: JwtPayload,
     @Param('sectionId', ParseIntPipe) sectionId: number,
     @Body() dto: CreateLessonDto,
+    @UploadedFile() file?: TempFile,
   ) {
-    return this.lessons.create(sectionId, user, dto);
+    return this.lessons.create(sectionId, user, dto, file);
   }
 
   @Put(':sectionId/lessons/order')

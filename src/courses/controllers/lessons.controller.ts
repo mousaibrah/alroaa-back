@@ -7,14 +7,24 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { Permission } from '../../auth/constants/permissions.js';
-import { UpdateLessonDto } from '../dto/lesson.dto.js';
+import { UpdateLessonDto, UpdateLessonFormDto } from '../dto/lesson.dto.js';
+import type { TempFile } from '../../media/services/media.service.js';
 import { LessonsService } from '../services/lessons.service.js';
+import { LessonFileInterceptor } from '../utils/lesson-file.interceptor.js';
 
 @ApiTags('Lessons')
 @ApiBearerAuth()
@@ -24,13 +34,21 @@ export class LessonsController {
   constructor(private readonly lessons: LessonsService) {}
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a lesson' })
+  @ApiOperation({
+    summary: 'Update a lesson',
+    description:
+      'Send multipart/form-data with a `file` field to replace the content with an uploaded file.',
+  })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({ type: UpdateLessonFormDto })
+  @UseInterceptors(LessonFileInterceptor())
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateLessonDto,
+    @UploadedFile() file?: TempFile,
   ) {
-    return this.lessons.update(id, user, dto);
+    return this.lessons.update(id, user, dto, file);
   }
 
   @Delete(':id')

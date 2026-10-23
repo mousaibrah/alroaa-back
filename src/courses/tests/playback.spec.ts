@@ -76,7 +76,7 @@ describe('PlaybackService.resolve', () => {
         ? {
             id: 2,
             lessonType: 'video',
-            contentUrlEn: 'https://cdn.x/2.mp4',
+            contentUrl: 'https://cdn.x/2.mp4',
             isPreview: false,
             section: {
               courseId: 1,
@@ -135,8 +135,8 @@ describe('PlaybackService.resolve', () => {
     const lesson = {
       id: 2,
       lessonType: 'video',
-      contentUrlEn: 'https://cdn.x/2.mp4',
-      contentMediaEn: { id: 'm1', status: 'ready' },
+      contentUrl: 'https://cdn.x/2.mp4',
+      contentMedia: { id: 'm1', status: 'ready' },
       isPreview: false,
       section: {
         courseId: 1,
@@ -168,7 +168,7 @@ describe('PlaybackService.resolve', () => {
     const paidCourse = (isPreview: boolean) => ({
       id: 2,
       lessonType: 'video',
-      contentUrlEn: 'https://cdn.x/2.mp4',
+      contentUrl: 'https://cdn.x/2.mp4',
       isPreview,
       section: {
         courseId: 1,
@@ -192,7 +192,7 @@ describe('PlaybackService.resolve', () => {
     const draft = {
       id: 2,
       lessonType: 'video',
-      contentUrlEn: 'https://cdn.x/2.mp4',
+      contentUrl: 'https://cdn.x/2.mp4',
       isPreview: false,
       section: {
         courseId: 1,
@@ -211,7 +211,7 @@ describe('PlaybackService.resolve', () => {
     const noVideo = (extra: object) => ({
       id: 2,
       lessonType: 'video',
-      contentUrlEn: 'https://cdn.x/2.mp4',
+      contentUrl: 'https://cdn.x/2.mp4',
       isPreview: false,
       section: {
         courseId: 1,
@@ -223,7 +223,7 @@ describe('PlaybackService.resolve', () => {
       make({ lesson: noVideo({ lessonType: 'text' }) }).resolve(2, author),
     ).rejects.toBeInstanceOf(NotFoundException);
     await expect(
-      make({ lesson: noVideo({ contentUrlEn: null }) }).resolve(2, author),
+      make({ lesson: noVideo({ contentUrl: null }) }).resolve(2, author),
     ).rejects.toBeInstanceOf(NotFoundException);
     await expect(
       make({ lesson: null }).resolve(2, author),

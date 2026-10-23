@@ -1,12 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { rm } from 'node:fs/promises';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
-import { MediaService } from '../../media/services/media.service.js';
-import { contentRef } from '../../media/utils/lesson-content.util.js';
+import {
+  MediaService,
+  type TempFile,
+} from '../../media/services/media.service.js';
+import { contentStatus } from '../../media/utils/lesson-content.util.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from './course-access.service.js';
 import type { LessonType } from '../../generated/prisma/enums.js';
 import type { CreateLessonDto, UpdateLessonDto } from '../dto/lesson.dto.js';
 import { assertSameIds } from '../utils/reorder.util.js';
+
+const WITH_STATUS = {
+  contentMedia: { select: { status: true } },
+} as const;
 
 @Injectable()
 export class LessonsService {
@@ -16,124 +24,130 @@ export class LessonsService {
     private readonly media: MediaService,
   ) {}
 
-  // Validates the media a lesson points at and returns the duration to fill in
-  // when none was given (the first video found, English first).
-  private async checkMedia(
+  // Stores the uploaded file, runs `save` with its media id and URL, then queues
+  // the processing, which swaps the URL for the web MP4 and fills the duration.
+  // The temp file is always removed; if saving fails the stored file is too.
+  private async withFile<T>(
+    file: TempFile | undefined,
     lessonType: LessonType,
-    isPreview: boolean,
-    ids: (string | null | undefined)[],
     user: JwtPayload,
-  ): Promise<number | undefined> {
-    let durationSec: number | undefined;
-    for (const id of ids) {
-      if (!id) continue;
-      const media = await this.media.assertAttachable(
-        id,
-        lessonType,
-        isPreview,
-        user,
-      );
-      durationSec ??= media.durationSec ?? undefined;
+    save: (stored?: { mediaId: string; url: string }) => Promise<T>,
+  ): Promise<T> {
+    if (!file) return save();
+    try {
+      const media = await this.media.storeLessonFile(file, lessonType, user);
+      let saved: T;
+      try {
+        saved = await save({
+          mediaId: media.id,
+          url: this.media.publicUrl(media.key),
+        });
+      } catch (error) {
+        await this.media.removeIfUnused(media.id).catch(() => undefined);
+        throw error;
+      }
+      await this.media.enqueue(media.id);
+      return saved;
+    } finally {
+      await rm(file.path, { force: true });
     }
-    return lessonType === 'video' ? durationSec : undefined;
   }
 
-  private withContent<
+  private withStatus<
     L extends {
-      contentUrlEn: string | null;
-      contentUrlAr: string | null;
-      contentMediaEnId: string | null;
-      contentMediaArId: string | null;
+      contentUrl: string | null;
+      contentMedia: { status: string } | null;
     },
-  >(lesson: L) {
+  >({ contentMedia, ...lesson }: L) {
     return {
       ...lesson,
-      content: {
-        en: contentRef(lesson.contentMediaEnId, lesson.contentUrlEn),
-        ar: contentRef(lesson.contentMediaArId, lesson.contentUrlAr),
-      },
+      contentStatus: contentStatus({
+        contentUrl: lesson.contentUrl,
+        contentMedia,
+      }),
     };
   }
 
-  // New lessons go to the end of the section.
-  async create(sectionId: number, user: JwtPayload, dto: CreateLessonDto) {
+  // New lessons go to the end of the section. contentUrl points at the uploaded
+  // file right away; contentStatus stays "processing" until the web MP4 is made.
+  async create(
+    sectionId: number,
+    user: JwtPayload,
+    dto: CreateLessonDto,
+    file?: TempFile,
+  ) {
     await this.access.sectionForManage(sectionId, user);
+    if (!file) {
+      throw new BadRequestException(
+        'Upload the lesson file in the `file` field',
+      );
+    }
     const last = await this.prisma.lesson.aggregate({
       where: { sectionId, isDeleted: false },
       _max: { sortOrder: true },
     });
-    const isPreview = dto.isPreview ?? false;
-    const mediaDuration = await this.checkMedia(
-      dto.lessonType,
-      isPreview,
-      [dto.contentMediaEnId, dto.contentMediaArId],
-      user,
+    const lesson = await this.withFile(file, dto.lessonType, user, (stored) =>
+      this.prisma.lesson.create({
+        data: {
+          sectionId,
+          titleEn: dto.titleEn,
+          titleAr: dto.titleAr,
+          descriptionEn: dto.descriptionEn,
+          descriptionAr: dto.descriptionAr,
+          lessonType: dto.lessonType,
+          contentUrl: stored?.url,
+          contentMediaId: stored?.mediaId,
+          // Left empty, it is filled from the video.
+          durationSec: dto.durationSec,
+          isPreview: dto.isPreview ?? false,
+          sortOrder: (last._max.sortOrder ?? -1) + 1,
+        },
+        include: WITH_STATUS,
+      }),
     );
-    const lesson = await this.prisma.lesson.create({
-      data: {
-        sectionId,
-        titleEn: dto.titleEn,
-        titleAr: dto.titleAr,
-        descriptionEn: dto.descriptionEn,
-        descriptionAr: dto.descriptionAr,
-        lessonType: dto.lessonType,
-        contentUrlEn: dto.contentUrlEn,
-        contentUrlAr: dto.contentUrlAr,
-        contentMediaEnId: dto.contentMediaEnId,
-        contentMediaArId: dto.contentMediaArId,
-        durationSec: dto.durationSec ?? mediaDuration,
-        isPreview,
-        sortOrder: (last._max.sortOrder ?? -1) + 1,
-      },
-    });
-    return this.withContent(lesson);
+    return this.withStatus(lesson);
   }
 
-  async update(id: number, user: JwtPayload, dto: UpdateLessonDto) {
+  // A new file replaces the content and the old file is deleted.
+  async update(
+    id: number,
+    user: JwtPayload,
+    dto: UpdateLessonDto,
+    file?: TempFile,
+  ) {
     const current = await this.access.lessonForManage(id, user);
-    // Re-check the media whenever it, the type or the preview flag changes: a
-    // video behind the paywall must be private.
-    const mediaChanged =
-      dto.contentMediaEnId !== undefined ||
-      dto.contentMediaArId !== undefined ||
-      dto.lessonType !== undefined ||
-      dto.isPreview !== undefined;
-    const mediaEnId =
-      dto.contentMediaEnId === undefined
-        ? current.contentMediaEnId
-        : dto.contentMediaEnId;
-    const mediaArId =
-      dto.contentMediaArId === undefined
-        ? current.contentMediaArId
-        : dto.contentMediaArId;
-    const mediaDuration = mediaChanged
-      ? await this.checkMedia(
-          dto.lessonType ?? current.lessonType,
-          dto.isPreview ?? current.isPreview,
-          [mediaEnId, mediaArId],
-          user,
-        )
-      : undefined;
-    const lesson = await this.prisma.lesson.update({
-      where: { id },
-      data: {
-        titleEn: dto.titleEn,
-        titleAr: dto.titleAr,
-        descriptionEn: dto.descriptionEn,
-        descriptionAr: dto.descriptionAr,
-        lessonType: dto.lessonType,
-        contentUrlEn: dto.contentUrlEn,
-        contentUrlAr: dto.contentUrlAr,
-        contentMediaEnId: dto.contentMediaEnId,
-        contentMediaArId: dto.contentMediaArId,
-        // Only fills an empty duration from the video; never overwrites one.
-        durationSec:
-          dto.durationSec ??
-          (current.durationSec === null ? mediaDuration : undefined),
-        isPreview: dto.isPreview,
-      },
-    });
-    return this.withContent(lesson);
+    const lessonType = dto.lessonType ?? current.lessonType;
+    const hasContent =
+      current.contentUrl !== null || current.contentMediaId !== null;
+    if (!file && lessonType !== current.lessonType && hasContent) {
+      throw new BadRequestException(
+        'Upload a new file when changing the lesson type',
+      );
+    }
+    const lesson = await this.withFile(file, lessonType, user, (stored) =>
+      this.prisma.lesson.update({
+        where: { id },
+        data: {
+          titleEn: dto.titleEn,
+          titleAr: dto.titleAr,
+          descriptionEn: dto.descriptionEn,
+          descriptionAr: dto.descriptionAr,
+          lessonType: dto.lessonType,
+          ...(stored
+            ? { contentMediaId: stored.mediaId, contentUrl: stored.url }
+            : {}),
+          durationSec: dto.durationSec,
+          isPreview: dto.isPreview,
+        },
+        include: WITH_STATUS,
+      }),
+    );
+    if (file && current.contentMediaId) {
+      await this.media
+        .removeIfUnused(current.contentMediaId)
+        .catch(() => undefined);
+    }
+    return this.withStatus(lesson);
   }
 
   async remove(id: number, user: JwtPayload): Promise<void> {

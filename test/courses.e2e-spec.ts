@@ -73,13 +73,13 @@ describe.skipIf(!process.env.SCRATCH_URL)(
         titleEn: 'L1', titleAr: 'L1',
         lessonType: 'video',
         durationSec: 100,
-        contentUrlEn: 'https://x.com/1.mp4',
+        contentUrl: 'https://x.com/1.mp4',
       });
       const l2 = await lessons.create(s1.id, teacher, {
         titleEn: 'L2', titleAr: 'L2',
         lessonType: 'video',
         durationSec: 100,
-        contentUrlEn: 'https://x.com/2.mp4',
+        contentUrl: 'https://x.com/2.mp4',
       });
       const l3 = await lessons.create(s2.id, teacher, {
         titleEn: 'L3', titleAr: 'L3',
@@ -294,7 +294,7 @@ describe.skipIf(!process.env.SCRATCH_URL)(
         titleEn: 'L', titleAr: 'L',
         lessonType: 'video',
         durationSec: 100,
-        contentUrlEn: 'https://x.com/v.mp4',
+        contentUrl: 'https://x.com/v.mp4',
       });
       const exam = await exams.create(course.id, teacher, { titleEn: 'Quiz', titleAr: 'Quiz' });
       await exams.save(exam.id, teacher, {

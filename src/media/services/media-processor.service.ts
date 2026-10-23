@@ -74,18 +74,21 @@ export class MediaProcessorService {
         media.type === 'image'
           ? await this.processImage(media, dir)
           : await this.processVideo(media, dir);
-      await this.prisma.media.update({
-        where: { id: mediaId },
-        data: {
-          status: 'ready',
-          width: result.width,
-          height: result.height,
-          durationSec: result.durationSec,
-          thumbnailKey: result.thumbnailKey,
-          variants: result.variants,
-          ...(result.size === undefined ? {} : { size: BigInt(result.size) }),
-        },
-      });
+      await this.prisma.$transaction([
+        this.prisma.media.update({
+          where: { id: mediaId },
+          data: {
+            status: 'ready',
+            width: result.width,
+            height: result.height,
+            durationSec: result.durationSec,
+            thumbnailKey: result.thumbnailKey,
+            variants: result.variants,
+            ...(result.size === undefined ? {} : { size: BigInt(result.size) }),
+          },
+        }),
+        ...this.fillLessons(media, result),
+      ]);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.error(`Processing ${mediaId} failed: ${reason}`);
@@ -99,6 +102,30 @@ export class MediaProcessorService {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  }
+
+  // Lessons using this (public) file get its URL, the web MP4 for videos, and
+  // its duration when they have none.
+  private fillLessons(media: Media, result: Processed) {
+    if (media.isPrivate) return [];
+    const url = this.storage.getPublicUrl(
+      result.variants.mp4?.key ?? media.key,
+    );
+    const updates = [
+      this.prisma.lesson.updateMany({
+        where: { contentMediaId: media.id },
+        data: { contentUrl: url },
+      }),
+    ];
+    if (result.durationSec !== null) {
+      updates.push(
+        this.prisma.lesson.updateMany({
+          where: { contentMediaId: media.id, durationSec: null },
+          data: { durationSec: result.durationSec },
+        }),
+      );
+    }
+    return updates;
   }
 
   private async download(media: Media, dir: string): Promise<string> {

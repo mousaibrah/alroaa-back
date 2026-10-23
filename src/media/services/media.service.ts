@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import {
   BadRequestException,
   ConflictException,
@@ -22,6 +23,14 @@ import { buildMediaKey, validateUpload } from '../utils/media.util.js';
 import { MediaQueueService } from './media-queue.service.js';
 import { StorageService } from './storage.service.js';
 
+// A file multer saved to a temp path (multipart lesson uploads).
+export interface TempFile {
+  path: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
+}
+
 export type MediaVariants = Record<
   string,
   { key: string; width?: number; height?: number }
@@ -39,6 +48,61 @@ export class MediaService {
     private readonly storage: StorageService,
     private readonly queue: MediaQueueService,
   ) {}
+
+  // A file sent with the lesson form: stored in the public part of the bucket
+  // as an UPLOADED media item. Call `enqueue` once the lesson points at it; the
+  // processor then fills the lesson's content URL and duration.
+  async storeLessonFile(
+    file: TempFile,
+    lessonType: LessonType,
+    user: JwtPayload,
+  ): Promise<Media> {
+    const { type, ext } = validateUpload(file.mimetype, file.size);
+    if (type !== MEDIA_FOR_LESSON[lessonType]) {
+      throw new BadRequestException(
+        `A ${lessonType} lesson needs a ${MEDIA_FOR_LESSON[lessonType]} file`,
+      );
+    }
+    const id = randomUUID();
+    const key = buildMediaKey(id, ext, false);
+    await this.storage.putObject(
+      key,
+      createReadStream(file.path),
+      file.mimetype,
+      file.size,
+    );
+    return this.prisma.media.create({
+      data: {
+        id,
+        ownerId: user.sub,
+        key,
+        type,
+        mimeType: file.mimetype,
+        size: BigInt(file.size),
+        originalName: file.originalname.slice(0, 255),
+        status: 'uploaded',
+      },
+    });
+  }
+
+  enqueue(id: string): Promise<void> {
+    return this.queue.enqueue(id);
+  }
+
+  // Deletes a media item and its files once no lesson or course uses it.
+  async removeIfUnused(id: string): Promise<void> {
+    const used = await this.prisma.lesson.count({
+      where: { contentMediaId: id },
+    });
+    const usedAsCover = await this.prisma.course.count({
+      where: { thumbnailMediaId: id },
+    });
+    if (used + usedAsCover > 0) return;
+    const media = await this.prisma.media.findUnique({ where: { id } });
+    if (!media) return;
+    await this.storage.deleteObjects(this.keysOf(media));
+    await this.prisma.media.delete({ where: { id } });
+  }
 
   private canAccess(user: JwtPayload, media: Pick<Media, 'ownerId'>): boolean {
     return user.role === UserRole.ADMIN || media.ownerId === user.sub;
@@ -152,7 +216,7 @@ export class MediaService {
     const used = await this.prisma.lesson.count({
       where: {
         isDeleted: false,
-        OR: [{ contentMediaEnId: id }, { contentMediaArId: id }],
+        contentMediaId: id,
       },
     });
     const usedAsCover = await this.prisma.course.count({
@@ -174,38 +238,6 @@ export class MediaService {
       ...Object.values(variants).map((v) => v.key),
     ];
     return [...new Set(keys.filter((k): k is string => !!k))];
-  }
-
-  // Checks that a media item can be attached to a lesson: it exists, belongs to
-  // the caller (or the caller is an admin), is READY, matches the lesson type,
-  // and is private when it sits behind the paywall.
-  async assertAttachable(
-    id: string,
-    lessonType: LessonType,
-    isPreview: boolean,
-    user: JwtPayload,
-  ): Promise<Media> {
-    const media = await this.prisma.media.findUnique({ where: { id } });
-    if (!media) throw new BadRequestException(`Media ${id} not found`);
-    if (!this.canAccess(user, media)) {
-      throw new ForbiddenException('You can only use your own media');
-    }
-    if (media.status !== 'ready') {
-      throw new BadRequestException(
-        `Media ${id} is not ready (${media.status})`,
-      );
-    }
-    if (media.type !== MEDIA_FOR_LESSON[lessonType]) {
-      throw new BadRequestException(
-        `A ${lessonType} lesson needs ${MEDIA_FOR_LESSON[lessonType]} media`,
-      );
-    }
-    if (media.type === 'video' && !isPreview && !media.isPrivate) {
-      throw new BadRequestException(
-        'Videos in non-preview lessons must be uploaded with isPrivate: true',
-      );
-    }
-    return media;
   }
 
   publicUrl(key: string): string {

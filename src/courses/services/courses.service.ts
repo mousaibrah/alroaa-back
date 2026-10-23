@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { MediaService } from '../../media/services/media.service.js';
-import { contentRef } from '../../media/utils/lesson-content.util.js';
+import { contentStatus } from '../../media/utils/lesson-content.util.js';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CourseAccessService } from './course-access.service.js';
@@ -123,7 +123,11 @@ export class CoursesService {
           where: { isDeleted: false },
           orderBy: ORDER,
           include: {
-            lessons: { where: { isDeleted: false }, orderBy: ORDER },
+            lessons: {
+              where: { isDeleted: false },
+              orderBy: ORDER,
+              include: { contentMedia: { select: { status: true } } },
+            },
           },
         },
       },
@@ -254,26 +258,16 @@ export class CoursesService {
           // The learner may watch it now (the player then asks for a signed,
           // short-lived URL at GET /lessons/:id/playback).
           playable:
-            (lesson.contentUrlEn !== null ||
-              lesson.contentUrlAr !== null ||
-              lesson.contentMediaEnId !== null ||
-              lesson.contentMediaArId !== null) &&
+            (lesson.contentUrl !== null || lesson.contentMediaId !== null) &&
             hasAccess &&
             !isLocked(lesson.id) &&
             (paid || lesson.isPreview),
           // The stored video address is private: only the people who edit the
           // course get it (the lesson form needs it). Learners never do.
-          contentUrlEn: manages ? lesson.contentUrlEn : null,
-          contentUrlAr: manages ? lesson.contentUrlAr : null,
-          contentMediaEnId: manages ? lesson.contentMediaEnId : null,
-          contentMediaArId: manages ? lesson.contentMediaArId : null,
-          // Resolved source per language (media wins over the URL).
-          content: manages
-            ? {
-                en: contentRef(lesson.contentMediaEnId, lesson.contentUrlEn),
-                ar: contentRef(lesson.contentMediaArId, lesson.contentUrlAr),
-              }
-            : null,
+          contentUrl: manages ? lesson.contentUrl : null,
+          contentMediaId: manages ? lesson.contentMediaId : null,
+          // processing / ready / failed, while the uploaded file is handled.
+          contentStatus: manages ? contentStatus(lesson) : null,
         })),
       })),
     };

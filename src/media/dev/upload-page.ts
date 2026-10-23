@@ -51,7 +51,7 @@ $('go').onclick = async () => {
       log('   status: ' + m.status);
       if (m.status === 'failed') throw new Error(m.failureReason);
       if (m.status === 'ready') {
-        log('4. ready. Use this in PATCH /lessons/{id}:\\n   {"contentMediaEnId": "' + m.id + '"}');
+        log('4. ready. Use this in PATCH /lessons/{id}:\\n   {"contentMediaId": "' + m.id + '"}');
         const url = m.type === 'video' ? (m.urls.mp4 || m.urls.original) : (m.urls.medium || m.urls.original);
         $('preview').innerHTML = m.type === 'video'
           ? '<video controls src="' + url + '" poster="' + m.thumbnailUrl + '"></video>'

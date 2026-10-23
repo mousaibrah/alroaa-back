@@ -204,32 +204,28 @@ model CourseSection {
 }
 
 model Lesson {
-  id               Int           @id @default(autoincrement())
-  sectionId        Int           @map("section_id")
-  titleEn          String        @map("title_en") @db.VarChar(255)
-  titleAr          String        @map("title_ar") @db.VarChar(255)
-  descriptionEn    String?       @map("description_en")
-  descriptionAr    String?       @map("description_ar")
-  lessonType       LessonType    @map("lesson_type")
-  contentUrlEn     String?       @map("content_url_en")
-  contentUrlAr     String?       @map("content_url_ar")
-  contentMediaEnId String?       @map("content_media_en_id") @db.Uuid
-  contentMediaArId String?       @map("content_media_ar_id") @db.Uuid
-  durationSec      Int?          @map("duration_sec")
-  sortOrder        Int           @default(0) @map("sort_order")
-  isPreview        Boolean       @default(false) @map("is_preview")
-  isDeleted        Boolean       @default(false) @map("is_deleted")
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  section          CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  contentMediaEn   Media?        @relation("LessonMediaEn", fields: [contentMediaEnId], references: [id], onDelete: SetNull)
-  contentMediaAr   Media?        @relation("LessonMediaAr", fields: [contentMediaArId], references: [id], onDelete: SetNull)
+  id             Int           @id @default(autoincrement())
+  sectionId      Int           @map("section_id")
+  titleEn        String        @map("title_en") @db.VarChar(255)
+  titleAr        String        @map("title_ar") @db.VarChar(255)
+  descriptionEn  String?       @map("description_en")
+  descriptionAr  String?       @map("description_ar")
+  lessonType     LessonType    @map("lesson_type")
+  contentUrl     String?       @map("content_url")
+  contentMediaId String?       @map("content_media_id") @db.Uuid
+  durationSec    Int?          @map("duration_sec")
+  sortOrder      Int           @default(0) @map("sort_order")
+  isPreview      Boolean       @default(false) @map("is_preview")
+  isDeleted      Boolean       @default(false) @map("is_deleted")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  section        CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  contentMedia   Media?        @relation("LessonMedia", fields: [contentMediaId], references: [id], onDelete: SetNull)
 
   progress LessonProgress[]
 
   @@index([sectionId], map: "idx_lessons_section_id")
-  @@index([contentMediaEnId], map: "idx_lessons_content_media_en_id")
-  @@index([contentMediaArId], map: "idx_lessons_content_media_ar_id")
+  @@index([contentMediaId], map: "idx_lessons_content_media_id")
   @@map("lessons")
 }
 
@@ -476,9 +472,8 @@ model Media {
   updatedAt     DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
   owner         User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
-  lessonsEn Lesson[] @relation("LessonMediaEn")
-  lessonsAr Lesson[] @relation("LessonMediaAr")
-  courses   Course[] @relation("CourseThumbnail")
+  lessons Lesson[] @relation("LessonMedia")
+  courses Course[] @relation("CourseThumbnail")
 
   @@index([ownerId], map: "idx_media_owner_id")
   @@index([status], map: "idx_media_status")

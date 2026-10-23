@@ -99,39 +99,6 @@ describe('MediaService.confirm', () => {
   });
 });
 
-describe('MediaService.assertAttachable', () => {
-  it('accepts READY private video for a paid lesson', async () => {
-    const { service } = make(row({ status: 'ready' }));
-    await expect(
-      service.assertAttachable('m1', 'video', false, user),
-    ).resolves.toBeDefined();
-  });
-
-  it('rejects media that is not READY or of the wrong type', async () => {
-    await expect(
-      make(row()).service.assertAttachable('m1', 'video', false, user),
-    ).rejects.toThrow(/not ready/);
-    await expect(
-      make(row({ status: 'ready' })).service.assertAttachable(
-        'm1',
-        'text',
-        true,
-        user,
-      ),
-    ).rejects.toThrow(/needs image/);
-  });
-
-  it('requires private video outside preview lessons', async () => {
-    const pub = row({ status: 'ready', isPrivate: false });
-    await expect(
-      make(pub).service.assertAttachable('m1', 'video', false, user),
-    ).rejects.toThrow(/isPrivate/);
-    await expect(
-      make(pub).service.assertAttachable('m1', 'video', true, user),
-    ).resolves.toBeDefined();
-  });
-});
-
 describe('MediaService.remove', () => {
   it('refuses when a lesson references the media', async () => {
     const { service, storage } = make(row(), { used: 1 });

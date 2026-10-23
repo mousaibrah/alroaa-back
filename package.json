@@ -41,6 +41,7 @@
     "class-validator": "^0.15.1",
     "dayjs": "^1.11.23",
     "dotenv": "^18.0.7",
+    "ffprobe": "^1.1.2",
     "fluent-ffmpeg": "^2.1.3",
     "pg-boss": "^12.38.0",
     "reflect-metadata": "^0.2.2",

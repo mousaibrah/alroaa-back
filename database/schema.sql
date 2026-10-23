@@ -104,8 +104,9 @@ CREATE TABLE course_sections (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- content_url_en / content_url_ar: the video (or text file) can differ per
--- language. Fill only one if the lesson exists in a single language.
+-- content_url: the lesson's video (or text file), one for both languages.
+-- A file uploaded with the lesson is stored in RustFS and its public URL is
+-- saved here.
 CREATE TABLE lessons (
     id             SERIAL PRIMARY KEY,
     section_id     INTEGER NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
@@ -361,14 +362,12 @@ CREATE INDEX idx_media_status ON media(status);
 
 CREATE TRIGGER trg_media_updated_at BEFORE UPDATE ON media FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- A lesson can use an uploaded file per language. content_url_en / content_url_ar
--- stay for external URLs; when a media item is set it takes precedence.
+-- A lesson can use an uploaded media item. content_url stays for plain URLs;
+-- when a media item is set it takes precedence.
 ALTER TABLE lessons
-    ADD COLUMN content_media_en_id UUID REFERENCES media(id) ON DELETE SET NULL,
-    ADD COLUMN content_media_ar_id UUID REFERENCES media(id) ON DELETE SET NULL;
+    ADD COLUMN content_media_id UUID REFERENCES media(id) ON DELETE SET NULL;
 
-CREATE INDEX idx_lessons_content_media_en_id ON lessons(content_media_en_id);
-CREATE INDEX idx_lessons_content_media_ar_id ON lessons(content_media_ar_id);
+CREATE INDEX idx_lessons_content_media_id ON lessons(content_media_id);
 
 -- A course cover can be an uploaded image. thumbnail_url stays for external URLs;
 -- when a media item is set it takes precedence.
