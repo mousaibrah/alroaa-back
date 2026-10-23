@@ -1,5 +1,6 @@
 import { rm } from 'node:fs/promises';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -51,28 +52,70 @@ export class CoursesService {
     return toCourse(course, (key) => this.media.publicUrl(key));
   }
 
-  // Stores the cover image and intro video that were sent, then runs `save`
-  // with their fields. Their URLs are set right away and switch to the
-  // processed copies (resized WebP, web MP4) in the background.
+  // A file the browser uploaded itself, sent as its media id instead of in
+  // the form.
+  private async uploaded(
+    mediaId: string | undefined,
+    file: TempFile | undefined,
+    type: 'image' | 'video',
+    user: JwtPayload,
+  ) {
+    if (!mediaId) return undefined;
+    if (file) {
+      throw new BadRequestException(
+        `Send either the ${type === 'image' ? 'thumbnail' : 'introVideo'} file or its media id, not both`,
+      );
+    }
+    return this.media.attachable(mediaId, type, user);
+  }
+
+  // Stores the cover image and intro video that were sent (or attaches the
+  // ones uploaded beforehand), then runs `save` with their fields. Their URLs
+  // are set right away and switch to the processed copies (resized WebP, web
+  // MP4) in the background.
   private async withFiles<T>(
     files: CourseUploads,
+    dto: Pick<CreateCourseDto, 'thumbnailMediaId' | 'introVideoMediaId'>,
     user: JwtPayload,
     save: (data: CourseFileFields) => Promise<T>,
   ): Promise<T> {
     const thumbnail = files.thumbnail?.[0];
     const introVideo = files.introVideo?.[0];
     try {
-      return await this.media.withUpload(thumbnail, 'image', user, (cover) =>
-        this.media.withUpload(introVideo, 'video', user, (intro) =>
-          save({
-            ...(cover
-              ? { thumbnailUrl: cover.url, thumbnailMediaId: cover.mediaId }
-              : {}),
-            ...(intro
-              ? { introVideoUrl: intro.url, introVideoMediaId: intro.mediaId }
-              : {}),
-          }),
-        ),
+      const uploadedCover = await this.uploaded(
+        dto.thumbnailMediaId,
+        thumbnail,
+        'image',
+        user,
+      );
+      const uploadedIntro = await this.uploaded(
+        dto.introVideoMediaId,
+        introVideo,
+        'video',
+        user,
+      );
+      return await this.media.withUpload(
+        thumbnail,
+        'image',
+        user,
+        (cover = uploadedCover) =>
+          this.media.withUpload(
+            introVideo,
+            'video',
+            user,
+            (intro = uploadedIntro) =>
+              save({
+                ...(cover
+                  ? { thumbnailUrl: cover.url, thumbnailMediaId: cover.mediaId }
+                  : {}),
+                ...(intro
+                  ? {
+                      introVideoUrl: intro.url,
+                      introVideoMediaId: intro.mediaId,
+                    }
+                  : {}),
+              }),
+          ),
       );
     } finally {
       // A rejected first file leaves the second one's temp file behind.
@@ -85,7 +128,7 @@ export class CoursesService {
   }
 
   create(user: JwtPayload, dto: CreateCourseDto, files: CourseUploads = {}) {
-    return this.withFiles(files, user, async (fileFields) => {
+    return this.withFiles(files, dto, user, async (fileFields) => {
       const base = slugify(dto.titleEn);
       for (let attempt = 0; ; attempt++) {
         const slug =
@@ -329,7 +372,7 @@ export class CoursesService {
     files: CourseUploads = {},
   ) {
     const current = await this.access.courseForManage(id, user);
-    const course = await this.withFiles(files, user, (fileFields) =>
+    const course = await this.withFiles(files, dto, user, (fileFields) =>
       this.prisma.course.update({
         where: { id },
         include: {
@@ -350,8 +393,12 @@ export class CoursesService {
       }),
     );
     const replaced = [
-      files.thumbnail?.length ? current.thumbnailMediaId : null,
-      files.introVideo?.length ? current.introVideoMediaId : null,
+      course.thumbnailMediaId !== current.thumbnailMediaId
+        ? current.thumbnailMediaId
+        : null,
+      course.introVideoMediaId !== current.introVideoMediaId
+        ? current.introVideoMediaId
+        : null,
     ];
     for (const mediaId of replaced) {
       if (mediaId) {

@@ -11,6 +11,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -55,6 +56,24 @@ export class CreateCourseDto {
   @IsOptional()
   @Matches(/^[A-Z]{3}$/, { message: 'currency must be a 3-letter ISO code' })
   currency?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'A cover image uploaded with POST /media/multipart (instead of the `thumbnail` field)',
+  })
+  @IsOptional()
+  @IsUUID()
+  thumbnailMediaId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'An intro video uploaded with POST /media/multipart (instead of the `introVideo` field). Recommended for large videos.',
+  })
+  @IsOptional()
+  @IsUUID()
+  introVideoMediaId?: string;
 }
 
 export class UpdateCourseDto extends PartialType(CreateCourseDto) {

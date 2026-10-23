@@ -158,7 +158,16 @@ describe('CoursesService cover and intro video upload', () => {
     const prisma = {
       course: {
         create: vi.fn(({ data }) => Promise.resolve(row(data))),
-        update: vi.fn(({ data }) => Promise.resolve(row(data))),
+        // Like Prisma: the whole row, with the fields that were not changed.
+        update: vi.fn(({ data }) =>
+          Promise.resolve(
+            row({
+              thumbnailMediaId: 'img1',
+              introVideoMediaId: 'vid1',
+              ...data,
+            }),
+          ),
+        ),
       },
     };
     const media = {
@@ -175,6 +184,9 @@ describe('CoursesService cover and intro video upload', () => {
       ),
       removeIfUnused: vi.fn().mockResolvedValue(undefined),
       publicUrl: (key: string) => key,
+      attachable: vi.fn((mediaId: string) =>
+        Promise.resolve({ mediaId, url: `http://s3/${mediaId}` }),
+      ),
     };
     const access = {
       courseForManage: vi.fn().mockResolvedValue({
@@ -227,5 +239,42 @@ describe('CoursesService cover and intro video upload', () => {
     expect(data).not.toHaveProperty('thumbnailMediaId');
     expect(data).not.toHaveProperty('introVideoMediaId');
     expect(media.removeIfUnused).not.toHaveBeenCalled();
+  });
+
+  const uploadedId = '6f1c1c1e-6a51-4a9c-9a0e-3f6c2b8e1a11';
+
+  it('attaches an intro video uploaded beforehand and deletes the old one', async () => {
+    const { service, prisma, media } = make();
+    await service.update(1, user(5), { introVideoMediaId: uploadedId });
+    expect(media.attachable).toHaveBeenCalledWith(
+      uploadedId,
+      'video',
+      expect.anything(),
+    );
+    const data = prisma.course.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      introVideoMediaId: uploadedId,
+      introVideoUrl: `http://s3/${uploadedId}`,
+    });
+    expect(data).not.toHaveProperty('thumbnailMediaId');
+    expect(media.removeIfUnused).toHaveBeenCalledWith('vid1');
+    expect(media.removeIfUnused).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the file when the same media id is sent again', async () => {
+    const { service, media } = make();
+    await service.update(1, user(5), { thumbnailMediaId: 'img1' });
+    expect(media.removeIfUnused).not.toHaveBeenCalled();
+  });
+
+  it('refuses a file and a media id for the same field', async () => {
+    const { service } = make();
+    await expect(
+      service.create(
+        user(5),
+        { titleEn: 'A', titleAr: 'A', introVideoMediaId: uploadedId },
+        { introVideo: [intro] },
+      ),
+    ).rejects.toThrow('not both');
   });
 });

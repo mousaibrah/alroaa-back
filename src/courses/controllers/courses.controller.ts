@@ -56,7 +56,7 @@ export class CoursesController {
   @ApiOperation({
     summary: 'Create a course (starts as a draft)',
     description:
-      'Send multipart/form-data with the cover image in `thumbnail` and the intro video in `introVideo` (both optional).',
+      'Send `thumbnailMediaId` / `introVideoMediaId` (files uploaded with POST /media/multipart; best for large videos) or multipart/form-data with the cover image in `thumbnail` and the intro video in `introVideo` (all optional).',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: CreateCourseFormDto })
@@ -99,7 +99,7 @@ export class CoursesController {
   @ApiOperation({
     summary: 'Update a course (author or admin)',
     description:
-      'Send multipart/form-data with a new cover in `thumbnail` and/or intro video in `introVideo` to replace them.',
+      'To replace the cover or intro video, send `thumbnailMediaId` / `introVideoMediaId` (files uploaded with POST /media/multipart) or multipart/form-data with `thumbnail` / `introVideo`.',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateCourseFormDto })

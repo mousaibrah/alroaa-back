@@ -110,9 +110,9 @@ Run `database/migrations/2026-10-24-user-image-media.sql` for profile pictures.
 
 ## Lessons
 
-The admin frontend uploads lesson files with the multipart endpoints above (parts in parallel, each
+The admin frontend uploads lesson files, course covers and intro videos with the multipart endpoints above (parts in parallel, each
 retried on its own, straight to storage) and then creates or updates the lesson with JSON
-`{ ..., contentMediaId }`. The bytes never pass through the API, so request timeouts and the API's
+`{ ..., contentMediaId }` (courses: `{ ..., thumbnailMediaId, introVideoMediaId }`). The bytes never pass through the API, so request timeouts and the API's
 bandwidth do not limit video size. The media must be the caller's, public, of the lesson's type and
 not `pending` / `failed`. The multipart form below still works (fine for small files and curl).
 
