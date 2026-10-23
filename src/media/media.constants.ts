@@ -15,6 +15,9 @@ export const ALLOWED_MIME: Record<string, { type: MediaType; ext: string }> = {
 };
 
 export const PRESIGN_PUT_TTL_SEC = 15 * 60;
+// Multipart uploads: S3 needs parts of at least 5 MB and at most 10,000 parts.
+export const MULTIPART_PART_SIZE = 16 * 1024 * 1024;
+export const MULTIPART_MAX_PARTS = 10_000;
 // Paid lesson videos are handed out for one hour.
 export const PLAYBACK_GET_TTL_SEC = 60 * 60;
 export const METADATA_GET_TTL_SEC = 15 * 60;

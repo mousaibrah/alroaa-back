@@ -44,6 +44,27 @@ export class LessonsService {
     };
   }
 
+  // The content comes either as a multipart `file` or as the id of a file the
+  // browser uploaded itself (contentMediaId).
+  private async uploadedContent(
+    dto: CreateLessonDto | UpdateLessonDto,
+    lessonType: LessonType,
+    user: JwtPayload,
+    file?: TempFile,
+  ) {
+    if (!dto.contentMediaId) return undefined;
+    if (file) {
+      throw new BadRequestException(
+        'Send either a file or contentMediaId, not both',
+      );
+    }
+    return this.media.attachable(
+      dto.contentMediaId,
+      FILE_TYPE[lessonType],
+      user,
+    );
+  }
+
   // New lessons go to the end of the section. contentUrl points at the uploaded
   // file right away; contentStatus stays "processing" until the web MP4 is made.
   async create(
@@ -53,11 +74,17 @@ export class LessonsService {
     file?: TempFile,
   ) {
     await this.access.sectionForManage(sectionId, user);
-    if (!file) {
+    if (!file && !dto.contentMediaId) {
       throw new BadRequestException(
-        'Upload the lesson file in the `file` field',
+        'Upload the lesson file in the `file` field or send contentMediaId',
       );
     }
+    const uploaded = await this.uploadedContent(
+      dto,
+      dto.lessonType,
+      user,
+      file,
+    );
     const last = await this.prisma.lesson.aggregate({
       where: { sectionId, isDeleted: false },
       _max: { sortOrder: true },
@@ -66,7 +93,7 @@ export class LessonsService {
       file,
       FILE_TYPE[dto.lessonType],
       user,
-      (stored) =>
+      (stored = uploaded) =>
         this.prisma.lesson.create({
           data: {
             sectionId,
@@ -99,7 +126,8 @@ export class LessonsService {
     const lessonType = dto.lessonType ?? current.lessonType;
     const hasContent =
       current.contentUrl !== null || current.contentMediaId !== null;
-    if (!file && lessonType !== current.lessonType && hasContent) {
+    const uploaded = await this.uploadedContent(dto, lessonType, user, file);
+    if (!file && !uploaded && lessonType !== current.lessonType && hasContent) {
       throw new BadRequestException(
         'Upload a new file when changing the lesson type',
       );
@@ -108,7 +136,7 @@ export class LessonsService {
       file,
       FILE_TYPE[lessonType],
       user,
-      (stored) =>
+      (stored = uploaded) =>
         this.prisma.lesson.update({
           where: { id },
           data: {
@@ -126,7 +154,8 @@ export class LessonsService {
           include: WITH_STATUS,
         }),
     );
-    if (file && current.contentMediaId) {
+    const replaced = lesson.contentMediaId !== current.contentMediaId;
+    if (replaced && current.contentMediaId) {
       await this.media
         .removeIfUnused(current.contentMediaId)
         .catch(() => undefined);

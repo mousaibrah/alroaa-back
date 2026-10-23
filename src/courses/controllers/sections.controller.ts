@@ -65,7 +65,7 @@ export class SectionsController {
   @ApiOperation({
     summary: 'Add a lesson at the end of the section',
     description:
-      'Send multipart/form-data with a `file` field to upload the content; the stored file URL is saved on the lesson.',
+      'Send `contentMediaId` (a file uploaded with POST /media/multipart; best for large videos) or multipart/form-data with a `file` field; the stored file URL is saved on the lesson.',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: CreateLessonFormDto })

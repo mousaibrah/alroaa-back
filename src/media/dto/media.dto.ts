@@ -38,6 +38,24 @@ export class PresignMediaDto {
   isPrivate?: boolean;
 }
 
+export class MultipartUploadDto {
+  @ApiProperty({
+    description: 'The uploadId returned by POST /media/multipart',
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1024)
+  uploadId: string;
+}
+
+export class MultipartPartDto extends MultipartUploadDto {
+  @ApiProperty({ example: 1, minimum: 1, maximum: 10000 })
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  partNumber: number;
+}
+
 export class ListMediaQueryDto {
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

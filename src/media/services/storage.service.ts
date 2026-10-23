@@ -1,14 +1,20 @@
 import { Readable } from 'node:stream';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
+  ListPartsCommand,
   PutBucketCorsCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -40,7 +46,12 @@ export class StorageService implements OnModuleInit {
       },
     });
     this.internal = new S3Client(config(endpoint));
-    this.signer = new S3Client(config(env('S3_PUBLIC_ENDPOINT', endpoint)));
+    // Presigned URLs have no body to checksum: by default the SDK would sign
+    // the checksum of an empty body and storage would refuse the real one.
+    this.signer = new S3Client({
+      ...config(env('S3_PUBLIC_ENDPOINT', endpoint)),
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+    });
   }
 
   // Storage being down must not stop the API from booting: log and carry on.
@@ -197,6 +208,104 @@ export class StorageService implements OnModuleInit {
         ContentLength: contentLength,
       }),
     );
+  }
+
+  // Multipart uploads: large files go up in parts, straight from the browser.
+  async createMultipartUpload(
+    key: string,
+    contentType: string,
+  ): Promise<string> {
+    const out = await this.internal.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+      }),
+    );
+    if (!out.UploadId) throw new Error('Storage returned no upload id');
+    return out.UploadId;
+  }
+
+  createPresignedPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    expiresIn = PRESIGN_PUT_TTL_SEC,
+  ): Promise<string> {
+    return getSignedUrl(
+      this.signer,
+      new UploadPartCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+        PartNumber: partNumber,
+      }),
+      { expiresIn },
+    );
+  }
+
+  // The parts storage has received, read on the server so the browser does
+  // not have to report ETags.
+  async listParts(
+    key: string,
+    uploadId: string,
+  ): Promise<{ PartNumber: number; ETag: string }[]> {
+    const parts: { PartNumber: number; ETag: string }[] = [];
+    let marker: string | undefined;
+    do {
+      const out = await this.internal.send(
+        new ListPartsCommand({
+          Bucket: this.bucket,
+          Key: key,
+          UploadId: uploadId,
+          PartNumberMarker: marker,
+        }),
+      );
+      for (const part of out.Parts ?? []) {
+        if (part.PartNumber && part.ETag) {
+          parts.push({ PartNumber: part.PartNumber, ETag: part.ETag });
+        }
+      }
+      marker = out.IsTruncated ? out.NextPartNumberMarker : undefined;
+    } while (marker);
+    return parts.sort((a, b) => a.PartNumber - b.PartNumber);
+  }
+
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: { PartNumber: number; ETag: string }[],
+  ): Promise<void> {
+    await this.internal.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: parts },
+      }),
+    );
+  }
+
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    await this.internal.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+      }),
+    );
+  }
+
+  // Unfinished uploads of a key (an abandoned upload keeps its parts).
+  async abortMultipartUploads(key: string): Promise<void> {
+    const out = await this.internal.send(
+      new ListMultipartUploadsCommand({ Bucket: this.bucket, Prefix: key }),
+    );
+    for (const upload of out.Uploads ?? []) {
+      if (upload.Key === key && upload.UploadId) {
+        await this.abortMultipartUpload(key, upload.UploadId);
+      }
+    }
   }
 
   async deleteObjects(keys: string[]): Promise<void> {

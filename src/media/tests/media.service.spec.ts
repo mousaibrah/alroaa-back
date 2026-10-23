@@ -49,6 +49,11 @@ const make = (
     createPresignedPutUrl: vi.fn().mockResolvedValue('https://put'),
     createPresignedGetUrl: vi.fn().mockResolvedValue('https://get'),
     getPublicUrl: vi.fn().mockReturnValue('https://public'),
+    createMultipartUpload: vi.fn().mockResolvedValue('u1'),
+    createPresignedPartUrl: vi.fn().mockResolvedValue('https://part'),
+    listParts: vi.fn().mockResolvedValue([]),
+    completeMultipartUpload: vi.fn(),
+    abortMultipartUpload: vi.fn(),
   };
   const queue = { enqueue: vi.fn() };
   const service = new MediaService(
@@ -143,5 +148,100 @@ describe('MediaService.playbackSource', () => {
       variants: null,
     } as never);
     expect(pub).toMatchObject({ url: 'https://public', expiresAt: null });
+  });
+});
+
+describe('MediaService multipart uploads', () => {
+  const big = (over: object = {}) =>
+    row({ size: BigInt(40 * 1024 * 1024), isPrivate: false, ...over });
+  const withMultipart = (media: object, parts: number) => {
+    const made = make(media, {
+      head: { size: 40 * 1024 * 1024, contentType: 'video/mp4' },
+    });
+    made.storage.listParts.mockResolvedValue(
+      Array.from({ length: parts }, (_, i) => ({
+        PartNumber: i + 1,
+        ETag: `"e${i}"`,
+      })),
+    );
+    return made;
+  };
+
+  it('starts with 16 MB parts', async () => {
+    const { service } = withMultipart(big(), 0);
+    const out = await service.startMultipart(user, {
+      filename: 'a.mp4',
+      mimeType: 'video/mp4',
+      size: 40 * 1024 * 1024,
+    });
+    expect(out).toMatchObject({
+      uploadId: 'u1',
+      partSize: 16 * 1024 * 1024,
+      partCount: 3,
+    });
+  });
+
+  it('refuses part numbers past the end', async () => {
+    const { service } = withMultipart(big(), 0);
+    await expect(
+      service.signPart('m1', user, { uploadId: 'u1', partNumber: 4 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.signPart('m1', user, { uploadId: 'u1', partNumber: 3 }),
+    ).resolves.toEqual({ url: 'https://part' });
+  });
+
+  it('completes, verifies and queues once every part is there', async () => {
+    const { service, storage, queue } = withMultipart(big(), 3);
+    await service.completeMultipart('m1', user, 'u1');
+    expect(storage.completeMultipartUpload).toHaveBeenCalledWith(
+      'media/2026/10/m1.mp4',
+      'u1',
+      expect.arrayContaining([{ PartNumber: 1, ETag: '"e0"' }]),
+    );
+    expect(queue.enqueue).toHaveBeenCalledWith('m1');
+  });
+
+  it('does not complete with missing parts', async () => {
+    const { service, storage } = withMultipart(big(), 2);
+    await expect(
+      service.completeMultipart('m1', user, 'u1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(storage.completeMultipartUpload).not.toHaveBeenCalled();
+  });
+
+  it('aborts and drops the row', async () => {
+    const { service, storage, prisma } = withMultipart(big(), 0);
+    await service.abortMultipart('m1', user, 'u1');
+    expect(storage.abortMultipartUpload).toHaveBeenCalledWith(
+      'media/2026/10/m1.mp4',
+      'u1',
+    );
+    expect(prisma.media.delete).toHaveBeenCalled();
+  });
+});
+
+describe('MediaService.attachable', () => {
+  it('returns the public URL of an uploaded file of the right type', async () => {
+    const { service } = make(row({ status: 'uploaded', isPrivate: false }));
+    await expect(service.attachable('m1', 'video', user)).resolves.toEqual({
+      mediaId: 'm1',
+      url: 'https://public',
+    });
+  });
+
+  it('refuses unfinished, private and wrong-type files', async () => {
+    const pending = make(row({ isPrivate: false }));
+    await expect(
+      pending.service.attachable('m1', 'video', user),
+    ).rejects.toThrow('The upload has not finished');
+    const priv = make(row({ status: 'ready' }));
+    await expect(priv.service.attachable('m1', 'video', user)).rejects.toThrow(
+      'Private files',
+    );
+    const image = make(row({ status: 'ready', isPrivate: false }));
+    await expect(image.service.attachable('m1', 'image', user)).rejects.toThrow(
+      'The file must be an image',
+    );
   });
 });

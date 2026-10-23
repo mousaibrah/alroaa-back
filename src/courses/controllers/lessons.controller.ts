@@ -37,7 +37,7 @@ export class LessonsController {
   @ApiOperation({
     summary: 'Update a lesson',
     description:
-      'Send multipart/form-data with a `file` field to replace the content with an uploaded file.',
+      'To replace the content, send `contentMediaId` (a file uploaded with POST /media/multipart; best for large videos) or multipart/form-data with a `file` field.',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateLessonFormDto })

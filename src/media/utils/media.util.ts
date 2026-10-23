@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import type { MediaType } from '../../generated/prisma/enums.js';
-import { ALLOWED_MIME } from '../media.constants.js';
+import {
+  ALLOWED_MIME,
+  MULTIPART_MAX_PARTS,
+  MULTIPART_PART_SIZE,
+} from '../media.constants.js';
 
 const MB = 1024 * 1024;
 
@@ -34,6 +38,13 @@ export const validateUpload = (
   }
   return allowed;
 };
+
+// 16 MB parts, larger (whole MBs) when the file would need over 10,000.
+export const multipartPartSize = (size: number): number =>
+  Math.max(
+    MULTIPART_PART_SIZE,
+    Math.ceil(size / MULTIPART_MAX_PARTS / MB) * MB,
+  );
 
 // media/{yyyy}/{mm}/{uuid}.{ext}. Private files live under `private/` so the
 // bucket policy can make `media/*` public without exposing them.

@@ -11,6 +11,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -66,6 +67,15 @@ export class CreateLessonDto {
   )
   @IsBoolean()
   isPreview?: boolean;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'A file uploaded with POST /media/multipart (instead of the `file` field). Recommended for large videos.',
+  })
+  @IsOptional()
+  @IsUUID()
+  contentMediaId?: string;
 }
 
 export class UpdateLessonDto extends PartialType(CreateLessonDto) {}

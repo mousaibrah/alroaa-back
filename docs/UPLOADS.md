@@ -40,6 +40,10 @@ All need a bearer token with `courses.update` (admins only). Owners see their ow
 |---|---|
 | `POST /media/presign` | `{filename, mimeType, size, isPrivate?}` → `{mediaId, key, url, headers}` |
 | `POST /media/:id/confirm` | Verifies the object (size and type), queues processing |
+| `POST /media/multipart` | Large files: same body as presign → `{mediaId, uploadId, partSize, partCount}` |
+| `POST /media/:id/multipart/part` | `{uploadId, partNumber}` → `{url}`: PUT bytes `[(n-1)·partSize, n·partSize)` there |
+| `POST /media/:id/multipart/complete` | `{uploadId}`: joins the parts, verifies, queues processing |
+| `POST /media/:id/multipart/abort` | `{uploadId}`: drops the parts and the media row |
 | `GET /media/:id` | Metadata, status and URLs (signed for private media) |
 | `GET /media` | `?page=&limit=` |
 | `DELETE /media/:id` | Refused (409) while a lesson uses it |
@@ -105,6 +109,12 @@ after the media one, then `database/migrations/2026-10-23-single-lesson-content.
 Run `database/migrations/2026-10-24-user-image-media.sql` for profile pictures.
 
 ## Lessons
+
+The admin frontend uploads lesson files with the multipart endpoints above (parts in parallel, each
+retried on its own, straight to storage) and then creates or updates the lesson with JSON
+`{ ..., contentMediaId }`. The bytes never pass through the API, so request timeouts and the API's
+bandwidth do not limit video size. The media must be the caller's, public, of the lesson's type and
+not `pending` / `failed`. The multipart form below still works (fine for small files and curl).
 
 A lesson is created in one multipart request: the lesson fields plus the file. The request returns
 right away; the file is processed in the background and its URL saved on the lesson.

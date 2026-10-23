@@ -51,7 +51,15 @@ const make = (createFails = false) => {
     media: {
       create: vi.fn(({ data }) => Promise.resolve(data)),
       findUnique: vi.fn(({ where }) =>
-        Promise.resolve({ id: where.id, key: 'k', variants: null }),
+        Promise.resolve({
+          id: where.id,
+          key: 'media/up.mp4',
+          variants: null,
+          ownerId: 1,
+          type: 'video',
+          status: 'uploaded',
+          isPrivate: false,
+        }),
       ),
       delete: vi.fn(),
     },
@@ -128,5 +136,41 @@ describe('LessonsService.create', () => {
     expect(storage.deleteObjects).toHaveBeenCalled();
     expect(queue.enqueue).not.toHaveBeenCalled();
     expect(existsSync(file.path)).toBe(false);
+  });
+});
+
+describe('LessonsService.create with an uploaded file', () => {
+  const mediaId = '6f1c1c1e-6a51-4a9c-9a0e-3f6c2b8e1a11';
+
+  it('attaches the media without storing or queueing again', async () => {
+    const { service, prisma, calls } = make();
+    await service.create(3, author, { ...dto, contentMediaId: mediaId });
+    expect(calls).toEqual(['create']);
+    expect(prisma.lesson.create.mock.calls[0][0].data).toMatchObject({
+      contentMediaId: mediaId,
+      contentUrl: 'http://s3/alroaa/media/up.mp4',
+    });
+  });
+
+  it('refuses a file and contentMediaId together', async () => {
+    const file = await tempFile();
+    await expect(
+      make().service.create(
+        3,
+        author,
+        { ...dto, contentMediaId: mediaId },
+        file,
+      ),
+    ).rejects.toThrow('not both');
+  });
+
+  it('refuses media of the wrong type', async () => {
+    await expect(
+      make().service.create(3, author, {
+        ...dto,
+        lessonType: 'text',
+        contentMediaId: mediaId,
+      }),
+    ).rejects.toThrow('The file must be an image');
   });
 });
