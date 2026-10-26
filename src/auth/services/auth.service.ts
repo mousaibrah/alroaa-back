@@ -19,10 +19,7 @@ import {
   type TempFile,
 } from '../../media/services/media.service.js';
 import type { AuthResponseDto } from '../dto/auth-response.dto.js';
-import type {
-  ChangeEmailDto,
-  ChangePasswordDto,
-} from '../dto/change-credentials.dto.js';
+import type { ChangePasswordDto } from '../dto/change-credentials.dto.js';
 import type { LoginDto } from '../dto/login.dto.js';
 import type { RegisterDto } from '../dto/register.dto.js';
 import type { JwtPayload } from '../types/jwt-payload.js';
@@ -109,8 +106,8 @@ export class AuthService {
     return this.buildResponse(user);
   }
 
-  // Both credential changes ask for the current password, sign out every other
-  // session, and hand back a fresh token for this one.
+  // Asks for the current password, signs out every other session, and hands
+  // back a fresh token for this one.
   async changePassword(
     caller: JwtPayload,
     dto: ChangePasswordDto,
@@ -121,35 +118,11 @@ export class AuthService {
         'The new password must differ from the current one',
       );
     }
-    const updated = await this.usersService.updateCredentials(user.id, {
-      password: await bcrypt.hash(dto.newPassword, SALT_ROUNDS),
-    });
+    const updated = await this.usersService.updatePassword(
+      user.id,
+      await bcrypt.hash(dto.newPassword, SALT_ROUNDS),
+    );
     return this.buildResponse(updated);
-  }
-
-  async changeEmail(
-    caller: JwtPayload,
-    dto: ChangeEmailDto,
-  ): Promise<AuthResponseDto> {
-    const user = await this.verifyPassword(caller.sub, dto.currentPassword);
-    const email = dto.email.toLowerCase();
-    if (email === user.email) {
-      throw new BadRequestException('This is already your email');
-    }
-    if (await this.usersService.findByEmail(email)) {
-      throw new ConflictException('Email is already registered');
-    }
-    try {
-      return this.buildResponse(
-        await this.usersService.updateCredentials(user.id, { email }),
-      );
-    } catch (error) {
-      // P2002: another account took the address in the meantime.
-      if ((error as { code?: string }).code === 'P2002') {
-        throw new ConflictException('Email is already registered');
-      }
-      throw error;
-    }
   }
 
   // 403, not 401: the session is valid, only the password is wrong (a 401

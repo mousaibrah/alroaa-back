@@ -15,7 +15,7 @@ import type { JwtPayload } from '../types/jwt-payload.js';
 // marked @Public(). Attaches the verified payload to `request.user`; on a
 // public route that is best-effort, so `user` is undefined for guests.
 // A token is also refused once its account is deleted, or when it was issued
-// before the last password or email change (that signs out other sessions).
+// before the last password change (that signs out other sessions).
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(

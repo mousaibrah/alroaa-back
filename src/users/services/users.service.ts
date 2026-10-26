@@ -185,14 +185,11 @@ export class UsersService {
     return phone;
   }
 
-  // Credential changes also end every other session (see JwtAuthGuard).
-  async updateCredentials(
-    id: number,
-    data: { email?: string; password?: string },
-  ): Promise<User> {
+  // A new password also ends every other session (see JwtAuthGuard).
+  async updatePassword(id: number, password: string): Promise<User> {
     const row = await this.prisma.user.update({
       where: { id },
-      data: { ...data, passwordChangedAt: new Date() },
+      data: { password, passwordChangedAt: new Date() },
     });
     return toUser(row);
   }

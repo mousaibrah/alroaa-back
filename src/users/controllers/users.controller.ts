@@ -43,7 +43,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Update your name, gender, date of birth or phone number',
     description:
-      'Email and password are changed through PATCH /users/me/email and PUT /users/me/password, which ask for the current password.',
+      'The email cannot be changed. The password is changed through PUT /users/me/password, which asks for the current one.',
   })
   @ApiOkResponse({ type: UserDto })
   @ApiConflictResponse({

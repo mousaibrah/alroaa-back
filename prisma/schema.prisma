@@ -128,7 +128,7 @@ model User {
   lastName          String    @map("last_name") @db.VarChar(100)
   email             String    @unique @db.VarChar(255)
   password          String    @db.VarChar(255) // bcrypt hash
-  // Tokens issued before this are refused (password or email change).
+  // Tokens issued before this are refused (password change).
   passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(6)
   image             String?
   imageMediaId      String?   @map("image_media_id") @db.Uuid

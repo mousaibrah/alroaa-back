@@ -81,7 +81,7 @@ CREATE TABLE users (
     email               VARCHAR(255) NOT NULL UNIQUE,
     password            VARCHAR(255) NOT NULL, -- a bcrypt hash, never plain text
     -- Access tokens issued before this are refused (signs out other sessions
-    -- after a password or email change).
+    -- after a password change).
     password_changed_at TIMESTAMPTZ,
     -- Profile picture: its URL (the 320px WebP once processed) and the media
     -- item behind it. The foreign key is added after the media table.
