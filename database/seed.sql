@@ -54,7 +54,8 @@ INSERT INTO users (
     is_deleted,
     last_name,
     password,
-    role_id
+    role_id,
+    email_verified_at
 )
 VALUES (
     '1999-11-05',
@@ -65,5 +66,6 @@ VALUES (
     FALSE,
     'Admin',
     '$2b$10$5cKlaDpgv9xuH0YtHGeBaunGV0z4PHRZDykR6EX3k3ei/HHh91udu',
-    1
+    1,
+    NOW()
 );

@@ -130,6 +130,8 @@ model User {
   password          String    @db.VarChar(255) // bcrypt hash
   // Tokens issued before this are refused (password change).
   passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(6)
+  // NULL until the emailed code is entered; unverified accounts can't log in.
+  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz(6)
   image             String?
   imageMediaId      String?   @map("image_media_id") @db.Uuid
   gender            BigInt? // 0 = male, 1 = female
@@ -144,18 +146,31 @@ model User {
   role              Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
   imageMedia        Media?    @relation("UserImage", fields: [imageMediaId], references: [id], onDelete: SetNull)
 
-  courses        Course[]
-  payments       Payment[]
-  enrollments    Enrollment[]
-  lessonProgress LessonProgress[]
-  examAttempts   ExamAttempt[]
-  certificates   Certificate[]
-  media          Media[]          @relation("MediaOwner")
+  courses               Course[]
+  payments              Payment[]
+  enrollments           Enrollment[]
+  lessonProgress        LessonProgress[]
+  examAttempts          ExamAttempt[]
+  certificates          Certificate[]
+  media                 Media[]                @relation("MediaOwner")
+  emailVerificationCode EmailVerificationCode?
 
   @@unique([countryCode, phoneNumber], map: "users_phone_unique")
   @@index([roleId], map: "idx_users_role_id")
   @@index([imageMediaId], map: "idx_users_image_media_id")
   @@map("users")
+}
+
+// The pending email verification code of an account (only a hash is kept).
+model EmailVerificationCode {
+  userId    Int      @id @map("user_id")
+  codeHash  String   @map("code_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  attempts  Int      @default(0)
+  sentAt    DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_codes")
 }
 
 // ---------------------------------------------------------------

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import type { MediaService } from '../../media/services/media.service.js';
 import type { UsersService } from '../../users/services/users.service.js';
 import { AuthService } from '../services/auth.service.js';
+import type { EmailVerificationService } from '../services/email-verification.service.js';
 import type { JwtPayload } from '../types/jwt-payload.js';
 
 const caller: JwtPayload = {
@@ -35,6 +36,7 @@ const make = async () => {
     users as unknown as UsersService,
     jwt as unknown as JwtService,
     {} as MediaService,
+    {} as EmailVerificationService,
   );
   return { service, users };
 };

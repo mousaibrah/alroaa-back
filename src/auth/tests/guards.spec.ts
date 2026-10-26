@@ -27,14 +27,28 @@ const reflectorFor = (metadata: Record<string, unknown>) =>
   }) as unknown as Reflector;
 
 // The account behind a token, as the guard reads it.
+// Verified unless the test says otherwise.
 const accounts = (
-  account: { isDeleted: boolean; passwordChangedAt: Date | null } | null = {
+  account: {
+    isDeleted: boolean;
+    passwordChangedAt: Date | null;
+    emailVerifiedAt?: Date | null;
+    email?: string;
+  } | null = {
     isDeleted: false,
     passwordChangedAt: null,
   },
 ) =>
   ({
-    user: { findUnique: vi.fn().mockResolvedValue(account) },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(
+        account && {
+          emailVerifiedAt: new Date(),
+          email: 'me@x.com',
+          ...account,
+        },
+      ),
+    },
   }) as unknown as PrismaService;
 
 describe('JwtAuthGuard', () => {
@@ -100,6 +114,45 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(makeContext(bearer(token)))).rejects.toThrow(
       'Session has ended',
     );
+  });
+
+  it('refuses an unverified account with a code the frontend can act on', async () => {
+    const token = await jwt.signAsync({ sub: 1 });
+    const guard = new JwtAuthGuard(
+      jwt,
+      reflectorFor({}),
+      accounts({
+        isDeleted: false,
+        passwordChangedAt: null,
+        emailVerifiedAt: null,
+        email: 'me@x.com',
+      }),
+    );
+    const error = await guard
+      .canActivate(makeContext(bearer(token)))
+      .catch((e: UnauthorizedException) => e);
+    expect(error).toBeInstanceOf(UnauthorizedException);
+    expect((error as UnauthorizedException).getResponse()).toMatchObject({
+      code: 'EMAIL_NOT_VERIFIED',
+      email: 'me@x.com',
+    });
+  });
+
+  it('treats an unverified account as a guest on public routes', async () => {
+    const token = await jwt.signAsync({ sub: 1 });
+    const request: { user?: unknown } & ReturnType<typeof bearer> =
+      bearer(token);
+    const guard = new JwtAuthGuard(
+      jwt,
+      reflectorFor({ [IS_PUBLIC_KEY]: true }),
+      accounts({
+        isDeleted: false,
+        passwordChangedAt: null,
+        emailVerifiedAt: null,
+      }),
+    );
+    await expect(guard.canActivate(makeContext(request))).resolves.toBe(true);
+    expect(request.user).toBeUndefined();
   });
 
   it('accepts a token issued in the same second as the change', async () => {

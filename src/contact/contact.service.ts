@@ -3,20 +3,21 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import nodemailer, { type Transporter } from 'nodemailer';
+import { MailService } from '../mail/mail.service.js';
 import { ContactDto } from './dto/contact.dto.js';
 
 @Injectable()
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
-  private transporter?: Transporter;
+
+  constructor(private readonly mail: MailService) {}
 
   async send(dto: ContactDto): Promise<{ message: string }> {
-    const from = process.env.SMTP_USER;
+    const from = this.mail.from;
     const to = process.env.CONTACT_TO_EMAIL || from;
 
     try {
-      await this.getTransporter().sendMail({
+      await this.mail.send({
         from: `"Alroaa Contact Form" <${from}>`,
         to,
         // Replying in the mail client goes straight to the visitor.
@@ -39,22 +40,5 @@ export class ContactService {
     }
 
     return { message: 'Your message has been sent' };
-  }
-
-  private getTransporter(): Transporter {
-    if (!this.transporter) {
-      const port = Number(process.env.SMTP_PORT ?? 465);
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST ?? 'mail.rnec.sa',
-        port,
-        // Port 465 is implicit SSL/TLS; other ports upgrade with STARTTLS.
-        secure: port === 465,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASSWORD,
-        },
-      });
-    }
-    return this.transporter;
   }
 }

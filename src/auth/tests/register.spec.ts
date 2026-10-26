@@ -1,6 +1,7 @@
 import type { JwtService } from '@nestjs/jwt';
 import type { MediaService } from '../../media/services/media.service.js';
 import type { UsersService } from '../../users/services/users.service.js';
+import type { EmailVerificationService } from '../services/email-verification.service.js';
 import { AuthService } from '../services/auth.service.js';
 
 const dto = {
@@ -34,25 +35,51 @@ const make = () => {
     setOwner: vi.fn().mockResolvedValue(undefined),
   };
   const jwt = { signAsync: vi.fn().mockResolvedValue('token') };
+  const verification = { send: vi.fn().mockResolvedValue(60) };
   const service = new AuthService(
     users as unknown as UsersService,
     jwt as unknown as JwtService,
     media as unknown as MediaService,
+    verification as unknown as EmailVerificationService,
   );
-  return { service, users, media };
+  return { service, users, media, verification, jwt };
 };
 
 describe('AuthService.register', () => {
+  it('emails a code and returns no token', async () => {
+    const { service, verification, jwt } = make();
+    const out = await service.register(dto);
+    expect(verification.send).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 11, email: 'new@x.com' }),
+    );
+    expect(out).toEqual({
+      verificationRequired: true,
+      email: 'new@x.com',
+      resendAvailableIn: 60,
+    });
+    expect(jwt.signAsync).not.toHaveBeenCalled();
+  });
+
+  it('still registers when the email cannot be sent', async () => {
+    const { service, verification } = make();
+    verification.send.mockRejectedValue(new Error('smtp down'));
+    const out = await service.register(dto);
+    expect(out).toMatchObject({
+      verificationRequired: true,
+      resendAvailableIn: 0,
+    });
+  });
+
   it('always registers as `user`', async () => {
     const { service, users } = make();
     const out = await service.register(dto);
     expect(users.findRoleIdByName).toHaveBeenCalledWith('user');
-    expect(out.role).toBe('user');
+    expect(out.verificationRequired).toBe(true);
   });
 
   it('stores the picture with no owner, then gives it to the new user', async () => {
     const { service, users, media } = make();
-    const out = await service.register(dto, picture);
+    await service.register(dto, picture);
     expect(media.withUpload.mock.calls[0].slice(1, 3)).toEqual(['image', null]);
     expect(users.create.mock.calls[0][0]).toMatchObject({
       email: 'new@x.com',
@@ -60,7 +87,6 @@ describe('AuthService.register', () => {
       imageMediaId: 'img1',
     });
     expect(media.setOwner).toHaveBeenCalledWith('img1', 11);
-    expect(out.user.image).toBe('http://s3/a.png');
   });
 
   it('works without a picture', async () => {

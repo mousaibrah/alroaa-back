@@ -83,6 +83,8 @@ CREATE TABLE users (
     -- Access tokens issued before this are refused (signs out other sessions
     -- after a password change).
     password_changed_at TIMESTAMPTZ,
+    -- NULL until the emailed code is entered; unverified accounts can't log in.
+    email_verified_at   TIMESTAMPTZ,
     -- Profile picture: its URL (the 320px WebP once processed) and the media
     -- item behind it. The foreign key is added after the media table.
     image               TEXT,
@@ -107,6 +109,16 @@ CREATE TABLE users (
 CREATE INDEX idx_users_role_id ON users(role_id);
 CREATE INDEX idx_users_image_media_id ON users(image_media_id);
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- The pending email verification code of an account (one at a time). Only a
+-- hash is kept; the row is deleted once the email is verified.
+CREATE TABLE email_verification_codes (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    code_hash  CHAR(64) NOT NULL,              -- sha256 hex
+    expires_at TIMESTAMPTZ NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,     -- wrong guesses so far
+    sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ---------------------------------------------------------------
 -- Media uploads: metadata of the files in storage

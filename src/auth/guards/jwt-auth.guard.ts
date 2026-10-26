@@ -11,11 +11,18 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import type { JwtPayload } from '../types/jwt-payload.js';
 
+export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
+
+type SessionStatus =
+  { kind: 'ok' } | { kind: 'ended' } | { kind: 'unverified'; email: string };
+
 // Registered globally: every route requires a valid bearer token unless it is
 // marked @Public(). Attaches the verified payload to `request.user`; on a
 // public route that is best-effort, so `user` is undefined for guests.
-// A token is also refused once its account is deleted, or when it was issued
-// before the last password change (that signs out other sessions).
+// A token is also refused once its account is deleted, when it was issued
+// before the last password change (that signs out other sessions), or while
+// the email is unverified: that 401 carries `code: EMAIL_NOT_VERIFIED` and the
+// email, so the frontend can log out and open the code screen.
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -47,24 +54,43 @@ export class JwtAuthGuard implements CanActivate {
       if (isPublic) return true;
       throw new UnauthorizedException('Invalid or expired token');
     }
-    if (!(await this.isCurrent(payload))) {
+    const status = await this.sessionStatus(payload);
+    if (status.kind !== 'ok') {
       if (isPublic) return true;
+      if (status.kind === 'unverified') {
+        throw new UnauthorizedException({
+          statusCode: 401,
+          message: 'Email is not verified',
+          code: EMAIL_NOT_VERIFIED,
+          email: status.email,
+        });
+      }
       throw new UnauthorizedException('Session has ended, log in again');
     }
     request.user = payload;
     return true;
   }
 
-  private async isCurrent(payload: JwtPayload): Promise<boolean> {
+  private async sessionStatus(payload: JwtPayload): Promise<SessionStatus> {
     const account = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isDeleted: true, passwordChangedAt: true },
+      select: {
+        isDeleted: true,
+        passwordChangedAt: true,
+        emailVerifiedAt: true,
+        email: true,
+      },
     });
-    if (!account || account.isDeleted) return false;
-    if (!account.passwordChangedAt) return true;
-    // `iat` has second precision: a token issued in the same second as the
-    // change (the one handed back by that request) still counts.
-    const changedSec = Math.floor(account.passwordChangedAt.getTime() / 1000);
-    return (payload.iat ?? 0) >= changedSec;
+    if (!account || account.isDeleted) return { kind: 'ended' };
+    if (account.passwordChangedAt) {
+      // `iat` has second precision: a token issued in the same second as the
+      // change (the one handed back by that request) still counts.
+      const changedSec = Math.floor(account.passwordChangedAt.getTime() / 1000);
+      if ((payload.iat ?? 0) < changedSec) return { kind: 'ended' };
+    }
+    if (!account.emailVerifiedAt) {
+      return { kind: 'unverified', email: account.email };
+    }
+    return { kind: 'ok' };
   }
 }
