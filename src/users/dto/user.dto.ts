@@ -31,6 +31,16 @@ export class UserDto {
   @ApiPropertyOptional({ example: '1995-04-23', nullable: true })
   dob: string | null;
 
+  @ApiProperty({ example: '+966' })
+  countryCode: string;
+
+  @ApiPropertyOptional({
+    example: '501234567',
+    nullable: true,
+    description: 'National number, digits only (null for older accounts)',
+  })
+  phoneNumber: string | null;
+
   @ApiProperty({ example: 2 })
   roleId: number;
 
@@ -46,6 +56,8 @@ export class UserDto {
       image: user.image,
       gender: user.gender,
       dob: user.dob,
+      countryCode: user.countryCode,
+      phoneNumber: user.phoneNumber,
       roleId: user.roleId,
       createdAt: user.createdAt,
     };

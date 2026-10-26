@@ -46,4 +46,26 @@ export class UpdateProfileDto {
     message: 'dob must be in YYYY-MM-DD format',
   })
   dob?: string | null;
+
+  @ApiPropertyOptional({
+    example: '+966',
+    description:
+      'Dialing code. Sent alone, it applies to your current phone number.',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{1,4}$/, { message: 'countryCode must look like +966' })
+  countryCode?: string;
+
+  @ApiPropertyOptional({
+    example: '0501234567',
+    description:
+      'Phone number without the dialing code; keeps your current dialing code unless countryCode is sent too. Stored as digits only.',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9\s()-]{4,20}$/, {
+    message: 'phoneNumber must contain digits only',
+  })
+  phoneNumber?: string;
 }

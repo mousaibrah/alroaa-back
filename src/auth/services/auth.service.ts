@@ -13,6 +13,7 @@ import { UserRole } from '../../users/types/user-role.enum.js';
 import type { User } from '../../users/types/user.entity.js';
 import { UsersService } from '../../users/services/users.service.js';
 import { assertDobNotInFuture } from '../../users/utils/dob.util.js';
+import { normalizePhone } from '../../users/utils/phone.util.js';
 import {
   MediaService,
   type TempFile,
@@ -40,10 +41,16 @@ export class AuthService {
   // (no owner yet), then handed to the new user.
   async register(dto: RegisterDto, image?: TempFile): Promise<AuthResponseDto> {
     assertDobNotInFuture(dto.dob);
+    const phone = normalizePhone(dto.countryCode, dto.phoneNumber);
 
     const email = dto.email.toLowerCase();
     if (await this.usersService.findByEmail(email)) {
       throw new ConflictException('Email is already registered');
+    }
+    if (
+      await this.usersService.findByPhone(phone.countryCode, phone.phoneNumber)
+    ) {
+      throw new ConflictException('Phone number is already registered');
     }
 
     // Every new account is a `user`; admins are only created in the database.
@@ -68,13 +75,20 @@ export class AuthService {
           imageMediaId: stored?.mediaId ?? null,
           gender: dto.gender ?? null,
           dob: dto.dob ?? null,
+          countryCode: phone.countryCode,
+          phoneNumber: phone.phoneNumber,
           roleId,
         }),
       );
     } catch (error) {
-      // Prisma P2002 = unique constraint violation: another request registered the same email first
+      // Prisma P2002 = unique constraint violation: another request registered
+      // the same email or phone first; the email check tells which.
       if ((error as { code?: string }).code === 'P2002') {
-        throw new ConflictException('Email is already registered');
+        throw new ConflictException(
+          (await this.usersService.findByEmail(email))
+            ? 'Email is already registered'
+            : 'Phone number is already registered',
+        );
       }
       throw error;
     }

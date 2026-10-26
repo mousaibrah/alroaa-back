@@ -11,6 +11,7 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConflictResponse,
   ApiConsumes,
   ApiOkResponse,
   ApiOperation,
@@ -40,11 +41,14 @@ export class UsersController {
 
   @Patch('me')
   @ApiOperation({
-    summary: 'Update your name, gender or date of birth',
+    summary: 'Update your name, gender, date of birth or phone number',
     description:
       'Email and password are changed through PATCH /users/me/email and PUT /users/me/password, which ask for the current password.',
   })
   @ApiOkResponse({ type: UserDto })
+  @ApiConflictResponse({
+    description: 'Phone number is already registered',
+  })
   async updateMe(
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateProfileDto,

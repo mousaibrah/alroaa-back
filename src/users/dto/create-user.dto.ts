@@ -10,5 +10,7 @@ export class CreateUserDto {
   imageMediaId?: string | null;
   gender: Gender | null;
   dob: string | null; // YYYY-MM-DD
+  countryCode: string; // e.g. +966
+  phoneNumber: string; // national number, digits only
   roleId: number;
 }

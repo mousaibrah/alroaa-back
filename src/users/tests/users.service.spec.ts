@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload.js';
 import type { MediaService } from '../../media/services/media.service.js';
 import type { PrismaService } from '../../prisma/prisma.service.js';
@@ -73,9 +73,13 @@ describe('UsersService.updateProfile', () => {
   const makeProfile = () => {
     const prisma = {
       user: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue({ id: 7, gender: null, dob: null }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 7,
+          gender: null,
+          dob: null,
+          countryCode: '+966',
+          phoneNumber: '501234567',
+        }),
         update: vi.fn(({ data }) =>
           Promise.resolve({ id: 7, gender: null, dob: null, ...data }),
         ),
@@ -96,7 +100,83 @@ describe('UsersService.updateProfile', () => {
       lastName: undefined,
       gender: null,
       dob: undefined,
+      countryCode: undefined,
+      phoneNumber: undefined,
     });
+  });
+
+  it('changes the phone number and keeps the current dialing code', async () => {
+    const { service, prisma } = makeProfile();
+    // findById, then the duplicate check finds nobody.
+    prisma.user.findFirst
+      .mockResolvedValueOnce({
+        id: 7,
+        countryCode: '+966',
+        phoneNumber: '501234567',
+      })
+      .mockResolvedValueOnce(null);
+    await service.updateProfile(7, { phoneNumber: '055 000 1111' });
+    expect(prisma.user.update.mock.calls[0][0].data).toMatchObject({
+      countryCode: '+966',
+      phoneNumber: '550001111',
+    });
+  });
+
+  it('changes only the dialing code of the current number', async () => {
+    const { service, prisma } = makeProfile();
+    prisma.user.findFirst
+      .mockResolvedValueOnce({
+        id: 7,
+        countryCode: '+966',
+        phoneNumber: '791234567',
+      })
+      .mockResolvedValueOnce(null);
+    await service.updateProfile(7, { countryCode: '962' });
+    expect(prisma.user.update.mock.calls[0][0].data).toMatchObject({
+      countryCode: '+962',
+      phoneNumber: '791234567',
+    });
+  });
+
+  it('asks for a number when the account has none', async () => {
+    const { service, prisma } = makeProfile();
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: 7,
+      countryCode: '+966',
+      phoneNumber: null,
+    });
+    await expect(
+      service.updateProfile(7, { countryCode: '+962' }),
+    ).rejects.toThrow('phoneNumber is required');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a number that belongs to another account', async () => {
+    const { service, prisma } = makeProfile();
+    prisma.user.findFirst
+      .mockResolvedValueOnce({
+        id: 7,
+        countryCode: '+966',
+        phoneNumber: '501234567',
+      })
+      .mockResolvedValueOnce({ id: 9 });
+    await expect(
+      service.updateProfile(7, { phoneNumber: '0550001111' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts re-sending your own number', async () => {
+    const { service, prisma } = makeProfile();
+    prisma.user.findFirst
+      .mockResolvedValueOnce({
+        id: 7,
+        countryCode: '+966',
+        phoneNumber: '501234567',
+      })
+      .mockResolvedValueOnce({ id: 7 });
+    await service.updateProfile(7, { phoneNumber: '0501234567' });
+    expect(prisma.user.update).toHaveBeenCalled();
   });
 
   it('refuses a date of birth in the future', async () => {

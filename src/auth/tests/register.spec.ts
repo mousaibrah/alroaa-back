@@ -8,6 +8,7 @@ const dto = {
   lastName: 'B',
   email: 'New@X.com',
   password: '12345678',
+  phoneNumber: '050 123 4567',
 };
 const picture = {
   path: '/tmp/register-spec-a.png',
@@ -19,6 +20,7 @@ const picture = {
 const make = () => {
   const users = {
     findByEmail: vi.fn().mockResolvedValue(undefined),
+    findByPhone: vi.fn().mockResolvedValue(undefined),
     findRoleIdByName: vi.fn().mockResolvedValue(2),
     create: vi.fn((data) => Promise.resolve({ id: 11, ...data })),
     findAccessByRoleId: vi
@@ -69,5 +71,43 @@ describe('AuthService.register', () => {
       imageMediaId: null,
     });
     expect(media.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('stores the phone as +966 and digits only by default', async () => {
+    const { service, users } = make();
+    await service.register(dto);
+    expect(users.create.mock.calls[0][0]).toMatchObject({
+      countryCode: '+966',
+      phoneNumber: '501234567',
+    });
+  });
+
+  it('rejects a Saudi number that is not a mobile', async () => {
+    const { service, users } = make();
+    await expect(
+      service.register({ ...dto, phoneNumber: '0112345678' }),
+    ).rejects.toThrow('Saudi phone numbers');
+    expect(users.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts other countries', async () => {
+    const { service, users } = make();
+    await service.register({
+      ...dto,
+      countryCode: '962',
+      phoneNumber: '0791234567',
+    });
+    expect(users.create.mock.calls[0][0]).toMatchObject({
+      countryCode: '+962',
+      phoneNumber: '791234567',
+    });
+  });
+
+  it('refuses a phone number that is already registered', async () => {
+    const { service, users } = make();
+    users.findByPhone.mockResolvedValue({ id: 3 });
+    await expect(service.register(dto)).rejects.toThrow(
+      'Phone number is already registered',
+    );
   });
 });

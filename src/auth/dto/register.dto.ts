@@ -34,6 +34,27 @@ export class RegisterDto {
   @MaxLength(72) // bcrypt ignores bytes past 72
   password: string;
 
+  @ApiPropertyOptional({
+    example: '+966',
+    default: '+966',
+    description: 'Dialing code; defaults to Saudi Arabia (+966)',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9]{1,4}$/, { message: 'countryCode must look like +966' })
+  countryCode?: string;
+
+  @ApiProperty({
+    example: '0501234567',
+    description:
+      'Phone number without the dialing code. Spaces, dashes and a leading 0 are allowed; it is stored as digits only (501234567).',
+  })
+  @IsString()
+  @Matches(/^[0-9\s()-]{4,20}$/, {
+    message: 'phoneNumber must contain digits only',
+  })
+  phoneNumber: string;
+
   @ApiPropertyOptional({ enum: [0, 1], description: '0 = male, 1 = female' })
   @IsOptional()
   // Multipart forms send numbers as text.

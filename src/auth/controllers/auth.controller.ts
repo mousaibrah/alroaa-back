@@ -40,7 +40,9 @@ export class AuthController {
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: RegisterFormDto })
   @ApiCreatedResponse({ type: AuthResponseDto })
-  @ApiConflictResponse({ description: 'Email is already registered' })
+  @ApiConflictResponse({
+    description: 'Email or phone number is already registered',
+  })
   @UseInterceptors(UploadInterceptor('image', 'image'))
   register(
     @Body() dto: RegisterDto,

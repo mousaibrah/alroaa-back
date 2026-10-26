@@ -89,10 +89,19 @@ CREATE TABLE users (
     image_media_id      UUID,
     gender              BIGINT CHECK (gender IN (0, 1)), -- 0 = male, 1 = female
     dob                 DATE,                            -- date of birth
+    -- Phone: dialing code (e.g. +966) and the national number, digits only.
+    country_code        VARCHAR(5) NOT NULL DEFAULT '+966'
+                        CHECK (country_code ~ '^\+[0-9]{1,4}$'),
+    phone_number        VARCHAR(15)
+                        CHECK (phone_number ~ '^[0-9]{4,15}$'),
+
     role_id             INTEGER NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
     is_deleted          BOOLEAN NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- The same full number can't belong to two accounts.
+    CONSTRAINT users_phone_unique UNIQUE (country_code, phone_number)
 );
 
 CREATE INDEX idx_users_role_id ON users(role_id);
