@@ -20,7 +20,8 @@ const makeService = (pending: object | null = null) => {
       findUnique: vi.fn().mockResolvedValue(pending),
       upsert: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({}),
     },
     user: { update: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn().mockResolvedValue([]),
@@ -45,6 +46,29 @@ describe('EmailVerificationService', () => {
     const stored = prisma.emailVerificationCode.upsert.mock.calls[0][0].create;
     expect(stored.codeHash).toBe(hash(code));
     expect(JSON.stringify(stored)).not.toContain(`"${code}"`);
+  });
+
+  it('answers without waiting for the email', async () => {
+    const { service, mail } = makeService();
+    mail.send.mockReturnValue(new Promise(() => undefined)); // never finishes
+    await expect(service.send(user)).resolves.toBe(60);
+  });
+
+  it('in production, reports a failed resend and lifts the cooldown', async () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const { service, prisma, mail } = makeService();
+      mail.send.mockRejectedValue(new Error('smtp down'));
+      await expect(service.resend(user)).rejects.toThrow(
+        'Could not send the verification code',
+      );
+      expect(prisma.emailVerificationCode.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { sentAt: new Date(0) } }),
+      );
+    } finally {
+      process.env.NODE_ENV = env;
+    }
   });
 
   it('does not send again within the cooldown', async () => {
@@ -72,7 +96,9 @@ describe('EmailVerificationService', () => {
       where: { id: 7 },
       data: { emailVerifiedAt: expect.any(Date) },
     });
-    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.emailVerificationCode.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 7 },
+    });
   });
 
   it('counts a wrong code', async () => {

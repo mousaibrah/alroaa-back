@@ -49,8 +49,10 @@ describe('AuthService.register', () => {
   it('emails a code and returns no token', async () => {
     const { service, verification, jwt } = make();
     const out = await service.register(dto);
+    // A new account has no code yet: no cooldown lookup.
     expect(verification.send).toHaveBeenCalledWith(
       expect.objectContaining({ id: 11, email: 'new@x.com' }),
+      true,
     );
     expect(out).toEqual({
       verificationRequired: true,

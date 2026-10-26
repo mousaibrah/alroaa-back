@@ -58,18 +58,21 @@ export class AuthService {
     const phone = normalizePhone(dto.countryCode, dto.phoneNumber);
 
     const email = dto.email.toLowerCase();
-    if (await this.usersService.findByEmail(email)) {
+    // Every new account is a `user`; admins are only created in the database.
+    // Resolved by name so no role id is hardcoded. The three lookups don't
+    // depend on each other, so they run together.
+    const [emailOwner, phoneOwner, roleId] = await Promise.all([
+      this.usersService.findByEmail(email),
+      this.usersService.findByPhone(phone.countryCode, phone.phoneNumber),
+      this.usersService.findRoleIdByName(UserRole.USER),
+    ]);
+    if (emailOwner) {
       throw new ConflictException('Email is already registered');
     }
-    if (
-      await this.usersService.findByPhone(phone.countryCode, phone.phoneNumber)
-    ) {
+    if (phoneOwner) {
       throw new ConflictException('Phone number is already registered');
     }
 
-    // Every new account is a `user`; admins are only created in the database.
-    // Resolved by name so no role id is hardcoded.
-    const roleId = await this.usersService.findRoleIdByName(UserRole.USER);
     if (roleId === undefined) {
       throw new InternalServerErrorException(
         'Roles are not set up: run database/seed.sql',
@@ -110,7 +113,7 @@ export class AuthService {
     if (user.imageMediaId) {
       await this.media.setOwner(user.imageMediaId, user.id);
     }
-    return this.requireVerification(user);
+    return this.requireVerification(user, true);
   }
 
   // An unverified account gets a fresh code instead of a token (only after the
@@ -176,10 +179,11 @@ export class AuthService {
   // registration: the user can ask for a new code right away.
   private async requireVerification(
     user: User,
+    isNewAccount = false,
   ): Promise<VerificationRequiredDto> {
     let resendAvailableIn = 0;
     try {
-      resendAvailableIn = await this.emailVerification.send(user);
+      resendAvailableIn = await this.emailVerification.send(user, isNewAccount);
     } catch (err) {
       this.logger.error('Could not send the verification code', err as Error);
     }

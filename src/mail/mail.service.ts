@@ -23,6 +23,13 @@ export class MailService {
         port,
         // Port 465 is implicit SSL/TLS; other ports upgrade with STARTTLS.
         secure: port === 465,
+        // Connecting and logging in takes 1-2s: reuse open connections.
+        pool: true,
+        maxConnections: 3,
+        // Fail fast instead of nodemailer's 2-minute default when the server
+        // can't be reached.
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASSWORD,
