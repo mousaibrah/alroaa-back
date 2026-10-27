@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import nodemailer, { type SendMailOptions, type Transporter } from 'nodemailer';
 
 // Sends email through the SMTP account in SMTP_* (mail.rnec.sa by default).
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
   private transporter?: Transporter;
 
   // The address emails are sent from.
@@ -11,8 +12,18 @@ export class MailService {
     return process.env.SMTP_USER;
   }
 
+  // Logs the server's reply: "250 OK id=…" only means the SMTP server queued
+  // the email, and the id is what its delivery log is searched by.
   async send(options: SendMailOptions): Promise<void> {
-    await this.getTransporter().sendMail(options);
+    const info = await this.getTransporter().sendMail(options);
+    const accepted = info.accepted ?? [];
+    const rejected = info.rejected ?? [];
+    this.logger.log(
+      `Sent "${options.subject}" to ${accepted.join(', ')}: ${info.response}`,
+    );
+    if (rejected.length > 0) {
+      this.logger.warn(`Rejected recipients: ${rejected.join(', ')}`);
+    }
   }
 
   private getTransporter(): Transporter {
