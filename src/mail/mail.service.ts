@@ -34,6 +34,10 @@ export class MailService {
         port,
         // Port 465 is implicit SSL/TLS; other ports upgrade with STARTTLS.
         secure: port === 465,
+        // Greet the server as the sender's domain, not the machine's hostname:
+        // mail.rnec.sa accepts mail greeted as the VPS (srv1033203.hstgr.cloud)
+        // with 250 OK, then never delivers it to outside addresses.
+        name: process.env.SMTP_USER?.split('@')[1] || undefined,
         // Connecting and logging in takes 1-2s: reuse open connections.
         pool: true,
         maxConnections: 3,
