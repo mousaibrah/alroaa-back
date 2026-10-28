@@ -40,7 +40,7 @@ const makeService = (pending: object | null = null) => {
 describe('EmailVerificationService', () => {
   it('emails a 6-digit code and stores only its hash', async () => {
     const { service, prisma, mail } = makeService();
-    expect(await service.send(user)).toBe(60);
+    expect(await service.send(user, 'verify_email')).toBe(60);
     const text: string = mail.send.mock.calls[0][0].text;
     const code = /: (\d{6})/.exec(text)![1];
     const stored = prisma.emailVerificationCode.upsert.mock.calls[0][0].create;
@@ -51,7 +51,7 @@ describe('EmailVerificationService', () => {
   it('answers without waiting for the email', async () => {
     const { service, mail } = makeService();
     mail.send.mockReturnValue(new Promise(() => undefined)); // never finishes
-    await expect(service.send(user)).resolves.toBe(60);
+    await expect(service.send(user, 'verify_email')).resolves.toBe(60);
   });
 
   it('in production, reports a failed resend and lifts the cooldown', async () => {
@@ -60,8 +60,8 @@ describe('EmailVerificationService', () => {
     try {
       const { service, prisma, mail } = makeService();
       mail.send.mockRejectedValue(new Error('smtp down'));
-      await expect(service.resend(user)).rejects.toThrow(
-        'Could not send the verification code',
+      await expect(service.resend(user, 'verify_email')).rejects.toThrow(
+        'Could not send the code',
       );
       expect(prisma.emailVerificationCode.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: { sentAt: new Date(0) } }),
@@ -75,14 +75,16 @@ describe('EmailVerificationService', () => {
     const { service, mail } = makeService({
       sentAt: new Date(Date.now() - 20_000),
     });
-    const wait = await service.send(user);
+    const wait = await service.send(user, 'verify_email');
     expect(wait).toBeGreaterThan(35);
     expect(mail.send).not.toHaveBeenCalled();
   });
 
   it('asks to wait when resending too soon', async () => {
     const { service } = makeService({ sentAt: new Date() });
-    await expect(service.resend(user)).rejects.toBeInstanceOf(HttpException);
+    await expect(service.resend(user, 'verify_email')).rejects.toBeInstanceOf(
+      HttpException,
+    );
   });
 
   it('verifies the right code and deletes it', async () => {
@@ -97,8 +99,56 @@ describe('EmailVerificationService', () => {
       data: { emailVerifiedAt: expect.any(Date) },
     });
     expect(prisma.emailVerificationCode.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 7, purpose: 'verify_email' },
+    });
+  });
+
+  it('sends the reset email for a reset code', async () => {
+    const { service, prisma, mail } = makeService();
+    await service.send(user, 'reset_password');
+    expect(mail.send.mock.calls[0][0].subject).toContain('Password reset');
+    expect(
+      prisma.emailVerificationCode.upsert.mock.calls[0][0].create.purpose,
+    ).toBe('reset_password');
+  });
+
+  it('resets the password with the right code, verifying the email', async () => {
+    const { service, prisma } = makeService({
+      codeHash: hash('123456'),
+      expiresAt: new Date(Date.now() + 60_000),
+      attempts: 0,
+    });
+    await service.resetPassword(
+      { ...user, emailVerifiedAt: null },
+      '123456',
+      'new-hash',
+    );
+    expect(prisma.emailVerificationCode.findUnique).toHaveBeenCalledWith({
+      where: { userId_purpose: { userId: 7, purpose: 'reset_password' } },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: {
+        password: 'new-hash',
+        passwordChangedAt: expect.any(Date),
+        emailVerifiedAt: expect.any(Date),
+      },
+    });
+    expect(prisma.emailVerificationCode.deleteMany).toHaveBeenCalledWith({
       where: { userId: 7 },
     });
+  });
+
+  it('does not reset the password with a wrong code', async () => {
+    const { service, prisma } = makeService({
+      codeHash: hash('123456'),
+      expiresAt: new Date(Date.now() + 60_000),
+      attempts: 0,
+    });
+    await expect(
+      service.resetPassword(user, '000000', 'new-hash'),
+    ).rejects.toThrow('incorrect');
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('counts a wrong code', async () => {
@@ -109,7 +159,7 @@ describe('EmailVerificationService', () => {
     });
     await expect(service.verify(user, '000000')).rejects.toThrow('incorrect');
     expect(prisma.emailVerificationCode.update).toHaveBeenCalledWith({
-      where: { userId: 7 },
+      where: { userId_purpose: { userId: 7, purpose: 'verify_email' } },
       data: { attempts: { increment: 1 } },
     });
   });
@@ -152,6 +202,7 @@ describe('AuthService login and verification', () => {
       send: vi.fn().mockResolvedValue(60),
       resend: vi.fn().mockResolvedValue(60),
       verify: vi.fn().mockResolvedValue(undefined),
+      resetPassword: vi.fn().mockResolvedValue(undefined),
     };
     const service = new AuthService(
       users as unknown as UsersService,
@@ -215,5 +266,51 @@ describe('AuthService login and verification', () => {
       resendAvailableIn: 60,
     });
     expect(verification.resend).not.toHaveBeenCalled();
+  });
+
+  it('answers forgot password the same for an unknown email', async () => {
+    const { service, users, verification } = await make(new Date());
+    users.findByEmail.mockResolvedValue(undefined);
+    expect(await service.forgotPassword('nobody@x.com')).toEqual({
+      resendAvailableIn: 60,
+    });
+    expect(verification.send).not.toHaveBeenCalled();
+  });
+
+  it('emails a reset code and hides a failure', async () => {
+    const { service, verification } = await make(new Date());
+    verification.send.mockRejectedValue(new Error('db down'));
+    expect(await service.forgotPassword('Me@x.com')).toEqual({
+      resendAvailableIn: 60,
+    });
+    expect(verification.send).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 }),
+      'reset_password',
+    );
+  });
+
+  it('resets the password and logs in', async () => {
+    const { service, verification } = await make(new Date());
+    const out = await service.resetPassword({
+      email: 'me@x.com',
+      code: '123456',
+      newPassword: 'NewPass123',
+    });
+    const [, code, passwordHash] = verification.resetPassword.mock.calls[0];
+    expect(code).toBe('123456');
+    expect(await bcrypt.compare('NewPass123', passwordHash)).toBe(true);
+    expect(out.accessToken).toBe('token');
+  });
+
+  it('refuses a reset for an unknown email like a wrong code', async () => {
+    const { service, users } = await make(new Date());
+    users.findByEmail.mockResolvedValue(undefined);
+    await expect(
+      service.resetPassword({
+        email: 'nobody@x.com',
+        code: '123456',
+        newPassword: 'NewPass123',
+      }),
+    ).rejects.toThrow('The code is incorrect');
   });
 });

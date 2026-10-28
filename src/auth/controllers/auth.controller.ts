@@ -31,6 +31,10 @@ import {
   VerifyEmailDto,
 } from '../dto/email-verification.dto.js';
 import { LoginDto } from '../dto/login.dto.js';
+import {
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from '../dto/password-reset.dto.js';
 import { RegisterDto, RegisterFormDto } from '../dto/register.dto.js';
 import type { TempFile } from '../../media/services/media.service.js';
 import { UploadInterceptor } from '../../media/utils/upload.interceptor.js';
@@ -113,5 +117,34 @@ export class AuthController {
     @Body() dto: ResendVerificationDto,
   ): Promise<ResendVerificationResponseDto> {
     return this.authService.resendVerification(dto.email);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Email a password reset code',
+    description:
+      'Answers the same for unknown emails. At most one code a minute: asking again sooner sends nothing, the last code still works. Then call POST /auth/reset-password.',
+  })
+  @ApiOkResponse({ type: ResendVerificationResponseDto })
+  forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<ResendVerificationResponseDto> {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Set a new password with the emailed reset code and log in',
+    description:
+      'The code expires after 10 minutes or 5 wrong attempts. Signs out every other session and marks the email verified.',
+  })
+  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiBadRequestResponse({
+    description: 'The code is incorrect, expired or used up too many attempts',
+  })
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<AuthResponseDto> {
+    return this.authService.resetPassword(dto);
   }
 }

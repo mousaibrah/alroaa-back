@@ -113,11 +113,13 @@ CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE 
 -- The pending email verification code of an account (one at a time). Only a
 -- hash is kept; the row is deleted once the email is verified.
 CREATE TABLE email_verification_codes (
-    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose    VARCHAR(20) NOT NULL DEFAULT 'verify_email', -- or 'reset_password'
     code_hash  CHAR(64) NOT NULL,              -- sha256 hex
     expires_at TIMESTAMPTZ NOT NULL,
     attempts   INTEGER NOT NULL DEFAULT 0,     -- wrong guesses so far
-    sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, purpose)
 );
 
 -- ---------------------------------------------------------------

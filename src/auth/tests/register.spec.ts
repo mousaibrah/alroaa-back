@@ -52,6 +52,7 @@ describe('AuthService.register', () => {
     // A new account has no code yet: no cooldown lookup.
     expect(verification.send).toHaveBeenCalledWith(
       expect.objectContaining({ id: 11, email: 'new@x.com' }),
+      'verify_email',
       true,
     );
     expect(out).toEqual({

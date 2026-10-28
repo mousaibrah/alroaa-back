@@ -146,14 +146,14 @@ model User {
   role              Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
   imageMedia        Media?    @relation("UserImage", fields: [imageMediaId], references: [id], onDelete: SetNull)
 
-  courses               Course[]
-  payments              Payment[]
-  enrollments           Enrollment[]
-  lessonProgress        LessonProgress[]
-  examAttempts          ExamAttempt[]
-  certificates          Certificate[]
-  media                 Media[]                @relation("MediaOwner")
-  emailVerificationCode EmailVerificationCode?
+  courses                Course[]
+  payments               Payment[]
+  enrollments            Enrollment[]
+  lessonProgress         LessonProgress[]
+  examAttempts           ExamAttempt[]
+  certificates           Certificate[]
+  media                  Media[]                 @relation("MediaOwner")
+  emailVerificationCodes EmailVerificationCode[]
 
   @@unique([countryCode, phoneNumber], map: "users_phone_unique")
   @@index([roleId], map: "idx_users_role_id")
@@ -161,15 +161,18 @@ model User {
   @@map("users")
 }
 
-// The pending email verification code of an account (only a hash is kept).
+// A pending emailed code of an account (only a hash is kept): one to verify
+// the email and one to reset the password (`purpose`).
 model EmailVerificationCode {
-  userId    Int      @id @map("user_id")
+  userId    Int      @map("user_id")
+  purpose   String   @default("verify_email") @db.VarChar(20)
   codeHash  String   @map("code_hash") @db.Char(64)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
   attempts  Int      @default(0)
   sentAt    DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@id([userId, purpose])
   @@map("email_verification_codes")
 }
 

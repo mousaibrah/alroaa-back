@@ -27,6 +27,7 @@ import type {
   VerifyEmailDto,
 } from '../dto/email-verification.dto.js';
 import type { LoginDto } from '../dto/login.dto.js';
+import type { ResetPasswordDto } from '../dto/password-reset.dto.js';
 import type { RegisterDto } from '../dto/register.dto.js';
 import type { JwtPayload } from '../types/jwt-payload.js';
 import {
@@ -152,8 +153,40 @@ export class AuthService {
       return { resendAvailableIn: RESEND_COOLDOWN_SEC };
     }
     return {
-      resendAvailableIn: await this.emailVerification.resend(user),
+      resendAvailableIn: await this.emailVerification.resend(
+        user,
+        'verify_email',
+      ),
     };
+  }
+
+  // Emails a reset code. Answers the same whether or not the email has an
+  // account, and doesn't wait for the email, so neither the answer nor its
+  // timing tells them apart. Within the cooldown no new code is sent: the
+  // last one still works.
+  async forgotPassword(email: string): Promise<ResendVerificationResponseDto> {
+    const user = await this.usersService.findByEmail(email.toLowerCase());
+    if (user) {
+      await this.emailVerification
+        .send(user, 'reset_password')
+        .catch((err: Error) =>
+          this.logger.error('Could not send the reset code', err),
+        );
+    }
+    return { resendAvailableIn: RESEND_COOLDOWN_SEC };
+  }
+
+  // The right code sets the new password, signs out every session and logs
+  // in with a fresh token.
+  async resetPassword(dto: ResetPasswordDto): Promise<AuthResponseDto> {
+    const user = await this.usersService.findByEmail(dto.email.toLowerCase());
+    if (!user) throw new BadRequestException('The code is incorrect');
+    await this.emailVerification.resetPassword(
+      user,
+      dto.code,
+      await bcrypt.hash(dto.newPassword, SALT_ROUNDS),
+    );
+    return this.buildResponse(user);
   }
 
   // Asks for the current password, signs out every other session, and hands
@@ -183,7 +216,11 @@ export class AuthService {
   ): Promise<VerificationRequiredDto> {
     let resendAvailableIn = 0;
     try {
-      resendAvailableIn = await this.emailVerification.send(user, isNewAccount);
+      resendAvailableIn = await this.emailVerification.send(
+        user,
+        'verify_email',
+        isNewAccount,
+      );
     } catch (err) {
       this.logger.error('Could not send the verification code', err as Error);
     }
